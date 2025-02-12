@@ -9,7 +9,15 @@ interface DisasterData {
   incident_start: string;
   incident_type: string;
   state: string;
-  [key: string]: any;
+  declaration_title: string;
+  declaration_request_number: string;
+  designation_date: string;
+  disaster_number: number;
+  declaration_type: string;
+  incident_begin_date: string;
+  incident_end_date: string;
+  place_code: string;
+  county_area: string;
 }
 
 const DisasterDataDownloader = () => {
@@ -75,7 +83,7 @@ const DisasterDataDownloader = () => {
 
   useEffect(() => {
     if (!loading) {
-      let filtered = data.filter(row => {
+      const filtered = data.filter(row => {
         if (!row.incident_start) return false;
         
         const incidentDate = new Date(row.incident_start);
