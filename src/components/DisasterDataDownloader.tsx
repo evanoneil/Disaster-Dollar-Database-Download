@@ -9,15 +9,13 @@ interface DisasterData {
   incident_start: string;
   incident_type: string;
   state: string;
-  declaration_title: string;
-  declaration_request_number: string;
-  designation_date: string;
-  disaster_number: number;
-  declaration_type: string;
-  incident_begin_date: string;
-  incident_end_date: string;
-  place_code: string;
-  county_area: string;
+  event: string;
+  ihp_total: number;
+  pa_total: number;
+  incident_number: number;
+  declaration_date: string;
+  declaration_url: string;
+  // ... add other fields as needed
 }
 
 const DisasterDataDownloader = () => {
@@ -32,6 +30,8 @@ const DisasterDataDownloader = () => {
   });
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -62,6 +62,7 @@ const DisasterDataDownloader = () => {
           header: true,
           dynamicTyping: true,
           complete: (results) => {
+            console.log('First row of data:', results.data[0]);
             setData(results.data as DisasterData[]);
             setLoading(false);
           }
@@ -101,6 +102,10 @@ const DisasterDataDownloader = () => {
     }
   }, [dateRange, selectedStates, selectedDisasterTypes, data, loading]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateRange, selectedStates, selectedDisasterTypes]);
+
   const handleDownload = () => {
     const processedData = filteredData.map(row => ({
       ...row,
@@ -119,6 +124,11 @@ const DisasterDataDownloader = () => {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   };
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentData = filteredData.slice(startIndex, endIndex);
 
   if (loading) {
     return <div className="text-center p-4">Loading data...</div>;
@@ -254,6 +264,72 @@ const DisasterDataDownloader = () => {
             Download Selected Data
           </button>
         </div>
+
+        {/* Records Table */}
+        <div className="mt-8 overflow-x-auto">
+          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Preview Records</h2>
+          <table className="min-w-full border-collapse border border-[#E6E7E8] text-sm">
+            <thead>
+              <tr className="bg-[#003A63] text-white">
+                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">Incident Date</th>
+                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">State</th>
+                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">Disaster Type</th>
+                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">Event</th>
+                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">Incident Number</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentData.map((row, index) => (
+                <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-[#E6E7E8]'}>
+                  <td className="px-3 py-2 border border-[#E6E7E8] text-sm">
+                    {new Date(row.incident_start).toLocaleDateString()}
+                  </td>
+                  <td className="px-3 py-2 border border-[#E6E7E8] text-sm">
+                    {stateNames[row.state as keyof typeof stateNames] || row.state}
+                  </td>
+                  <td className="px-3 py-2 border border-[#E6E7E8] text-sm">{row.incident_type}</td>
+                  <td className="px-3 py-2 border border-[#E6E7E8] text-sm">{row.event}</td>
+                  <td className="px-3 py-2 border border-[#E6E7E8] text-sm">{row.incident_number}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Pagination Controls */}
+          <div className="mt-4 flex items-center justify-between">
+            <p className="text-sm text-[#89684F]">
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredData.length)} of {filteredData.length} records
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className={`px-3 py-1 rounded-md ${
+                  currentPage === 1
+                    ? 'bg-[#E6E7E8] text-gray-500 cursor-not-allowed'
+                    : 'bg-[#89684F] text-white hover:bg-[#003A63]'
+                }`}
+              >
+                Previous
+              </button>
+              <span className="px-4 py-1 text-[#89684F]">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-1 rounded-md ${
+                  currentPage === totalPages
+                    ? 'bg-[#E6E7E8] text-gray-500 cursor-not-allowed'
+                    : 'bg-[#89684F] text-white hover:bg-[#003A63]'
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
