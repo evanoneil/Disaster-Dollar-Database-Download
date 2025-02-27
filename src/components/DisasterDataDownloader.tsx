@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import _ from 'lodash';
 import { Download } from 'lucide-react';
+import DisasterMap from './DisasterMap';
 
 interface DisasterData {
   incident_start: string;
@@ -12,6 +13,7 @@ interface DisasterData {
   event: string;
   ihp_total: number;
   pa_total: number;
+  cdbg_dr_total: number;
   incident_number: number;
   declaration_date: string;
   declaration_url: string;
@@ -30,6 +32,7 @@ const DisasterDataDownloader = () => {
   });
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
+  const [selectedFundingTypes, setSelectedFundingTypes] = useState<string[]>(['ihp', 'pa', 'cdbg_dr']);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -52,6 +55,10 @@ const DisasterDataDownloader = () => {
     'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont', 
     'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
   };
+
+  // Known territories for grouping
+  const territories = ['PR', 'GU', 'VI', 'MP', 'AS', 'FM', 'MH', 'PW'];
+  const [includesTerritories, setIncludesTerritories] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -92,7 +99,17 @@ const DisasterDataDownloader = () => {
         const endDate = new Date(dateRange.endYear, dateRange.endMonth, 0);
         
         const dateMatch = incidentDate >= startDate && incidentDate <= endDate;
-        const stateMatch = selectedStates.length === 0 || selectedStates.includes(row.state);
+        
+        // Handle territories as a special case
+        let stateMatch = false;
+        if (selectedStates.length === 0) {
+          stateMatch = true; // No states selected means all states match
+        } else if (territories.includes(row.state) && includesTerritories) {
+          stateMatch = true; // Include territories if the territories option is selected
+        } else {
+          stateMatch = selectedStates.includes(row.state); // Normal state matching
+        }
+        
         const typeMatch = selectedDisasterTypes.length === 0 || selectedDisasterTypes.includes(row.incident_type);
         
         return dateMatch && stateMatch && typeMatch;
@@ -100,11 +117,17 @@ const DisasterDataDownloader = () => {
 
       setFilteredData(filtered);
     }
-  }, [dateRange, selectedStates, selectedDisasterTypes, data, loading]);
+  }, [dateRange, selectedStates, selectedDisasterTypes, data, loading, includesTerritories]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateRange, selectedStates, selectedDisasterTypes]);
+  }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes]);
+
+  // Debug logging for map data
+  useEffect(() => {
+    console.log('Passing to map - filtered data sample:', filteredData.slice(0, 3));
+    console.log('Passing to map - total records:', filteredData.length);
+  }, [filteredData]);
 
   const handleDownload = () => {
     const processedData = filteredData.map(row => ({
@@ -135,7 +158,7 @@ const DisasterDataDownloader = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
+    <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <div className="mb-8">
         <h1 className="text-2xl font-bold mb-2 text-[#003A63]">Disaster Dollar Database Data Download Delivery Device</h1>
         <p className="text-[#89684F]">
@@ -197,12 +220,59 @@ const DisasterDataDownloader = () => {
           </div>
         </div>
 
+        {/* Map Section */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Disaster Map</h2>
+          <DisasterMap 
+            filteredData={filteredData} 
+            stateNames={stateNames} 
+            selectedFundingTypes={selectedFundingTypes}
+          />
+        </div>
+
         {/* Location Selection */}
         <div>
           <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Location</h2>
           <div className="border rounded-lg">
+            <div className="p-2 border-b flex justify-between items-center bg-gray-50">
+              <span className="text-sm font-medium text-[#003A63]">States & Territories</span>
+              <div className="space-x-2">
+                <button
+                  onClick={() => {
+                    const allStateAbbrs = Object.keys(stateNames);
+                    setSelectedStates(allStateAbbrs);
+                    setIncludesTerritories(true);
+                  }}
+                  className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedStates([]);
+                    setIncludesTerritories(false);
+                  }}
+                  className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
             <div className="max-h-60 overflow-y-auto p-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {/* Add Territories as a special option */}
+                <label className="flex items-center space-x-2 bg-gray-100 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={includesTerritories}
+                    onChange={(e) => {
+                      setIncludesTerritories(e.target.checked);
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm font-medium">U.S. Territories</span>
+                </label>
+                
                 {Object.entries(stateNames).map(([abbr, name]) => (
                   <label key={abbr} className="flex items-center space-x-2">
                     <input
@@ -228,25 +298,120 @@ const DisasterDataDownloader = () => {
         {/* Disaster Type Selection */}
         <div>
           <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Disaster Types</h2>
-          <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {_.uniq(data.map(row => row.incident_type)).filter(Boolean).sort().map(type => (
-                <label key={type} className="flex items-center space-x-2">
+          <div className="border rounded-lg">
+            <div className="p-2 border-b flex justify-between items-center bg-gray-50">
+              <span className="text-sm font-medium text-[#003A63]">Incident Types</span>
+              <div className="space-x-2">
+                <button
+                  onClick={() => {
+                    const allDisasterTypes = _.uniq(data.map(row => row.incident_type)).filter(Boolean).sort();
+                    setSelectedDisasterTypes(allDisasterTypes);
+                  }}
+                  className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => setSelectedDisasterTypes([])}
+                  className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+            <div className="p-4 max-h-60 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {_.uniq(data.map(row => row.incident_type)).filter(Boolean).sort().map(type => (
+                  <label key={type} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedDisasterTypes.includes(type)}
+                      onChange={(e) => {
+                        setSelectedDisasterTypes(
+                          e.target.checked
+                            ? [...selectedDisasterTypes, type]
+                            : selectedDisasterTypes.filter(t => t !== type)
+                        );
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm">{type}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Funding Type Selection */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Funding Types</h2>
+          <div className="border rounded-lg">
+            <div className="p-2 border-b flex justify-between items-center bg-gray-50">
+              <span className="text-sm font-medium text-[#003A63]">Funding Programs</span>
+              <div className="space-x-2">
+                <button
+                  onClick={() => setSelectedFundingTypes(['ihp', 'pa', 'cdbg_dr'])}
+                  className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => setSelectedFundingTypes([])}
+                  className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    checked={selectedDisasterTypes.includes(type)}
+                    checked={selectedFundingTypes.includes('ihp')}
                     onChange={(e) => {
-                      setSelectedDisasterTypes(
+                      setSelectedFundingTypes(
                         e.target.checked
-                          ? [...selectedDisasterTypes, type]
-                          : selectedDisasterTypes.filter(t => t !== type)
+                          ? [...selectedFundingTypes, 'ihp']
+                          : selectedFundingTypes.filter(t => t !== 'ihp')
                       );
                     }}
                     className="rounded border-gray-300"
                   />
-                  <span className="text-sm">{type}</span>
+                  <span className="text-sm">Individual & Household Program (IHP)</span>
                 </label>
-              ))}
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedFundingTypes.includes('pa')}
+                    onChange={(e) => {
+                      setSelectedFundingTypes(
+                        e.target.checked
+                          ? [...selectedFundingTypes, 'pa']
+                          : selectedFundingTypes.filter(t => t !== 'pa')
+                      );
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm">Public Assistance (PA)</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedFundingTypes.includes('cdbg_dr')}
+                    onChange={(e) => {
+                      setSelectedFundingTypes(
+                        e.target.checked
+                          ? [...selectedFundingTypes, 'cdbg_dr']
+                          : selectedFundingTypes.filter(t => t !== 'cdbg_dr')
+                      );
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm">Community Development Block Grant (CDBG-DR)</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>

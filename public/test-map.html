@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>US States Map Test</title>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .map-overlay {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.8);
+            margin-right: 20px;
+            font-family: Arial, sans-serif;
+            overflow: auto;
+            border-radius: 3px;
+            padding: 10px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            z-index: 1;
+        }
+        .legend {
+            padding: 10px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        .legend h4 {
+            margin: 0 0 10px;
+        }
+        .legend div {
+            height: 10px;
+            width: 30px;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .legend label {
+            display: inline-block;
+            width: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="map-overlay">
+        <div class="legend">
+            <h4>Disaster Count</h4>
+            <div style="background: #ffffff"></div><label>0</label><br/>
+            <div style="background: #f7fbff"></div><label>1-4</label><br/>
+            <div style="background: #deebf7"></div><label>5-9</label><br/>
+            <div style="background: #c6dbef"></div><label>10-19</label><br/>
+            <div style="background: #9ecae1"></div><label>20-29</label><br/>
+            <div style="background: #6baed6"></div><label>30-49</label><br/>
+            <div style="background: #4292c6"></div><label>50-74</label><br/>
+            <div style="background: #2171b5"></div><label>75-99</label><br/>
+            <div style="background: #08519c"></div><label>100+</label>
+        </div>
+    </div>
+
+    <script>
+        // Initialize map
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: [
+                            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                        ],
+                        tileSize: 256,
+                        attribution: '&copy; OpenStreetMap Contributors'
+                    }
+                },
+                layers: [
+                    {
+                        id: 'osm',
+                        type: 'raster',
+                        source: 'osm',
+                        minzoom: 0,
+                        maxzoom: 19
+                    }
+                ]
+            },
+            center: [-98.5795, 39.8283], // Center of the US
+            zoom: 3
+        });
+
+        // Map of FIPS state codes to state abbreviations
+        const stateIdToAbbr = {
+            '01': 'AL', '02': 'AK', '04': 'AZ', '05': 'AR', '06': 'CA', 
+            '08': 'CO', '09': 'CT', '10': 'DE', '11': 'DC', '12': 'FL', 
+            '13': 'GA', '15': 'HI', '16': 'ID', '17': 'IL', '18': 'IN', 
+            '19': 'IA', '20': 'KS', '21': 'KY', '22': 'LA', '23': 'ME', 
+            '24': 'MD', '25': 'MA', '26': 'MI', '27': 'MN', '28': 'MS', 
+            '29': 'MO', '30': 'MT', '31': 'NE', '32': 'NV', '33': 'NH', 
+            '34': 'NJ', '35': 'NM', '36': 'NY', '37': 'NC', '38': 'ND', 
+            '39': 'OH', '40': 'OK', '41': 'OR', '42': 'PA', '44': 'RI', 
+            '45': 'SC', '46': 'SD', '47': 'TN', '48': 'TX', '49': 'UT', 
+            '50': 'VT', '51': 'VA', '53': 'WA', '54': 'WV', '55': 'WI', 
+            '56': 'WY'
+        };
+
+        // Sample disaster data (for testing)
+        const sampleData = {
+            'AL': 25, 'AK': 10, 'AZ': 15, 'AR': 30, 'CA': 120, 
+            'CO': 20, 'CT': 5, 'FL': 80, 'GA': 40, 'HI': 8,
+            'ID': 12, 'IL': 35, 'IN': 22, 'IA': 18, 'KS': 45,
+            'LA': 70, 'TX': 95, 'NY': 60, 'WA': 50, 'OR': 40
+        };
+
+        // Add states layer when map loads
+        map.on('load', () => {
+            // Load GeoJSON data
+            fetch('/data/us-states.geojson')
+                .then(response => response.json())
+                .then(statesGeoJson => {
+                    // Add state count properties to the GeoJSON
+                    const features = statesGeoJson.features.map(feature => {
+                        const stateId = feature.id;
+                        const stateAbbr = stateIdToAbbr[stateId];
+                        const count = stateAbbr && sampleData[stateAbbr] ? sampleData[stateAbbr] : 0;
+                        
+                        return {
+                            ...feature,
+                            properties: {
+                                ...feature.properties,
+                                state_count: count,
+                                state_abbr: stateAbbr
+                            }
+                        };
+                    });
+                    
+                    // Add the states source
+                    map.addSource('states', {
+                        type: 'geojson',
+                        data: {
+                            type: 'FeatureCollection',
+                            features
+                        }
+                    });
+                    
+                    // Add the choropleth layer
+                    map.addLayer({
+                        id: 'states-layer',
+                        type: 'fill',
+                        source: 'states',
+                        paint: {
+                            'fill-color': [
+                                'step',
+                                ['get', 'state_count'],
+                                '#ffffff', // 0 count
+                                1, '#f7fbff',
+                                5, '#deebf7',
+                                10, '#c6dbef',
+                                20, '#9ecae1',
+                                30, '#6baed6',
+                                50, '#4292c6',
+                                75, '#2171b5',
+                                100, '#08519c'
+                            ],
+                            'fill-opacity': 0.8,
+                            'fill-outline-color': '#000'
+                        }
+                    });
+                    
+                    // Add state borders layer
+                    map.addLayer({
+                        id: 'state-borders',
+                        type: 'line',
+                        source: 'states',
+                        layout: {},
+                        paint: {
+                            'line-color': '#000',
+                            'line-width': 1
+                        }
+                    });
+                    
+                    // Create a popup but don't add it to the map yet
+                    const popup = new maplibregl.Popup({
+                        closeButton: false,
+                        closeOnClick: false
+                    });
+                    
+                    // Add hover effect
+                    map.on('mousemove', 'states-layer', (e) => {
+                        if (!e.features || e.features.length === 0) return;
+                        
+                        const feature = e.features[0];
+                        const stateAbbr = feature.properties.state_abbr;
+                        const stateName = feature.properties.name;
+                        const count = feature.properties.state_count || 0;
+                        
+                        // Change cursor style
+                        map.getCanvas().style.cursor = 'pointer';
+                        
+                        // Create popup content
+                        let html = `<strong>${stateName} (${stateAbbr})</strong><br>`;
+                        html += `Disaster Count: ${count}`;
+                        
+                        // Update popup position and content
+                        popup.setLngLat(e.lngLat)
+                            .setHTML(html)
+                            .addTo(map);
+                    });
+                    
+                    // Remove popup when mouse leaves the states layer
+                    map.on('mouseleave', 'states-layer', () => {
+                        map.getCanvas().style.cursor = '';
+                        popup.remove();
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading GeoJSON:', error);
+                });
+        });
+    </script>
+</body>
+</html> 
