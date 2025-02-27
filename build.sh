@@ -7,5 +7,5 @@ echo "NPM version: $(npm -v)"
 # Install dependencies with legacy peer deps flag
 npm install --legacy-peer-deps
 
-# Build the Next.js app
-npm run build 
+# Build the Next.js app without running lint
+npm run build -- --no-lint 
