@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import maplibregl, { GeoJSONSource } from 'maplibre-gl';
+import maplibregl, { GeoJSONSource, Expression } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 interface DisasterData {
@@ -7,7 +7,7 @@ interface DisasterData {
   incident_type: string;
   ihp_total: number;
   pa_total: number;
-  cdbg_dr_total: number;
+  cdbg_dr_allocation: number;
   [key: string]: any; // Allow other properties
 }
 
@@ -201,7 +201,7 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
   // Function to create a color expression with literal values
   const createColorExpression = useCallback((thresholds: number[] = [0, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000]) => {
     // Create a complete interpolate expression with the provided thresholds
-    const expression: any[] = [
+    const expression: any = [
       'interpolate',
       ['linear'],
       ['get', 'state_funding']
@@ -340,9 +340,9 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
           territoryFunding += paTotal;
         }
         
-        if (selectedFundingTypes.includes('cdbg_dr')) {
-          const cdbgDrTotal = typeof item.cdbg_dr_total === 'number' ? item.cdbg_dr_total : 
-                             (typeof item.cdbg_dr_total === 'string' ? parseFloat(item.cdbg_dr_total) || 0 : 0);
+        if (selectedFundingTypes.includes('cdbg_dr_allocation')) {
+          const cdbgDrTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+                             (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
           territoryFunding += cdbgDrTotal;
         }
         
@@ -380,9 +380,9 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
         totalFunding += paTotal;
       }
       
-      if (selectedFundingTypes.includes('cdbg_dr')) {
-        cdbgDrTotal = typeof item.cdbg_dr_total === 'number' ? item.cdbg_dr_total : 
-                     (typeof item.cdbg_dr_total === 'string' ? parseFloat(item.cdbg_dr_total) || 0 : 0);
+      if (selectedFundingTypes.includes('cdbg_dr_allocation')) {
+        cdbgDrTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+                     (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
         totalFunding += cdbgDrTotal;
       }
       
@@ -421,9 +421,12 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
     // Ensure thresholds are unique and strictly ascending
     const uniqueThresholds = [...new Set(newThresholds)].sort((a, b) => a - b);
     
-    setDynamicThresholds(uniqueThresholds);
-    console.log('Updated dynamic thresholds:', uniqueThresholds);
-  }, [filteredData, getStateData, calculateDynamicThresholds]);
+    // Only update if thresholds have actually changed
+    if (JSON.stringify(uniqueThresholds) !== JSON.stringify(dynamicThresholds)) {
+      setDynamicThresholds(uniqueThresholds);
+      console.log('Updated dynamic thresholds:', uniqueThresholds);
+    }
+  }, [filteredData, getStateData, dynamicThresholds]); // Removed calculateDynamicThresholds from dependencies
 
   // Load GeoJSON data
   useEffect(() => {
@@ -508,6 +511,7 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
         type: 'fill',
         source: 'states',
         paint: {
+          // @ts-ignore
           'fill-color': colorExpression,
           'fill-opacity': 0.8,
           'fill-outline-color': '#000'
@@ -579,10 +583,10 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
             }, 0);
             
           const cdbgDrTotal = filteredData
-            .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('cdbg_dr'))
+            .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('cdbg_dr_allocation'))
             .reduce((sum, item) => {
-              const cdbgDr = typeof item.cdbg_dr_total === 'number' ? item.cdbg_dr_total : 
-                           (typeof item.cdbg_dr_total === 'string' ? parseFloat(item.cdbg_dr_total) || 0 : 0);
+              const cdbgDr = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+                           (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
               return sum + cdbgDr;
             }, 0);
           
@@ -606,7 +610,7 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
             html += `PA: ${formattedPA}<br>`;
           }
           
-          if (selectedFundingTypes.includes('cdbg_dr')) {
+          if (selectedFundingTypes.includes('cdbg_dr_allocation')) {
             const formattedCDBG = new Intl.NumberFormat('en-US', {
               style: 'currency',
               currency: 'USD',

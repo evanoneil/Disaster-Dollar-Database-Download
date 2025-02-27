@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import _ from 'lodash';
 import { Download } from 'lucide-react';
+import TimeSeriesBrush from './TimeSeriesBrush';
 import DisasterMap from './DisasterMap';
 
 interface DisasterData {
@@ -13,7 +14,7 @@ interface DisasterData {
   event: string;
   ihp_total: number;
   pa_total: number;
-  cdbg_dr_total: number;
+  cdbg_dr_allocation: number;
   incident_number: number;
   declaration_date: string;
   declaration_url: string;
@@ -32,7 +33,7 @@ const DisasterDataDownloader = () => {
   });
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
-  const [selectedFundingTypes, setSelectedFundingTypes] = useState<string[]>(['ihp', 'pa', 'cdbg_dr']);
+  const [selectedFundingTypes, setSelectedFundingTypes] = useState<string[]>(['ihp', 'pa', 'cdbg_dr_allocation']);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -167,58 +168,14 @@ const DisasterDataDownloader = () => {
       </div>
 
       <div className="space-y-6">
-        {/* Date Range Selection */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Date Range</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Start Date</label>
-              <div className="flex gap-2">
-                <select
-                  value={dateRange.startMonth}
-                  onChange={(e) => setDateRange({ ...dateRange, startMonth: parseInt(e.target.value) })}
-                  className="flex-1 rounded-md border border-gray-300 p-2"
-                >
-                  {months.map((month, index) => (
-                    <option key={index + 1} value={index + 1}>{month}</option>
-                  ))}
-                </select>
-                <select
-                  value={dateRange.startYear}
-                  onChange={(e) => setDateRange({ ...dateRange, startYear: parseInt(e.target.value) })}
-                  className="flex-1 rounded-md border border-gray-300 p-2"
-                >
-                  {_.range(2003, 2026).map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">End Date</label>
-              <div className="flex gap-2">
-                <select
-                  value={dateRange.endMonth}
-                  onChange={(e) => setDateRange({ ...dateRange, endMonth: parseInt(e.target.value) })}
-                  className="flex-1 rounded-md border border-gray-300 p-2"
-                >
-                  {months.map((month, index) => (
-                    <option key={index + 1} value={index + 1}>{month}</option>
-                  ))}
-                </select>
-                <select
-                  value={dateRange.endYear}
-                  onChange={(e) => setDateRange({ ...dateRange, endYear: parseInt(e.target.value) })}
-                  className="flex-1 rounded-md border border-gray-300 p-2"
-                >
-                  {_.range(2003, 2026).map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Time Series Brush Selector */}
+        {!loading && (
+          <TimeSeriesBrush 
+            data={data} 
+            dateRange={dateRange} 
+            onDateRangeChange={setDateRange} 
+          />
+        )}
 
         {/* Map Section */}
         <div>
@@ -351,7 +308,7 @@ const DisasterDataDownloader = () => {
               <span className="text-sm font-medium text-[#003A63]">Funding Programs</span>
               <div className="space-x-2">
                 <button
-                  onClick={() => setSelectedFundingTypes(['ihp', 'pa', 'cdbg_dr'])}
+                  onClick={() => setSelectedFundingTypes(['ihp', 'pa', 'cdbg_dr_allocation'])}
                   className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
                 >
                   Select All
@@ -399,12 +356,12 @@ const DisasterDataDownloader = () => {
                 <label className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    checked={selectedFundingTypes.includes('cdbg_dr')}
+                    checked={selectedFundingTypes.includes('cdbg_dr_allocation')}
                     onChange={(e) => {
                       setSelectedFundingTypes(
                         e.target.checked
-                          ? [...selectedFundingTypes, 'cdbg_dr']
-                          : selectedFundingTypes.filter(t => t !== 'cdbg_dr')
+                          ? [...selectedFundingTypes, 'cdbg_dr_allocation']
+                          : selectedFundingTypes.filter(t => t !== 'cdbg_dr_allocation')
                       );
                     }}
                     className="rounded border-gray-300"
@@ -475,11 +432,8 @@ const DisasterDataDownloader = () => {
                     : 'bg-[#89684F] text-white hover:bg-[#003A63]'
                 }`}
               >
-                Previous
+                &larr; Previous
               </button>
-              <span className="px-4 py-1 text-[#89684F]">
-                Page {currentPage} of {totalPages}
-              </span>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
@@ -489,15 +443,14 @@ const DisasterDataDownloader = () => {
                     : 'bg-[#89684F] text-white hover:bg-[#003A63]'
                 }`}
               >
-                Next
+                Next &rarr;
               </button>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
 };
 
-export default DisasterDataDownloader; 
+export default DisasterDataDownloader;
