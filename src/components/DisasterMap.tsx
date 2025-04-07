@@ -470,6 +470,9 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
       zoom: 3
     });
 
+    // Disable scroll zooming to prevent accidental zoom
+    map.current.scrollZoom.disable();
+
     // Add states layer when map loads
     map.current.on('load', () => {
       if (!map.current || !statesGeoJson) return;
@@ -553,97 +556,200 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
         const stateName = stateNames[stateAbbr] || stateAbbr;
         const stateStats = stateData[stateAbbr];
         
-        let html = `<strong>${stateName}</strong><br>`;
-        
-        if (stateStats) {
-          const formattedFunding = new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            maximumFractionDigits: 0
-          }).format(stateStats.funding);
+        // Calculate funding type totals for this state
+        const ihpTotal = filteredData
+          .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('ihp'))
+          .reduce((sum, item) => {
+            const ihp = typeof item.ihp_total === 'number' ? item.ihp_total : 
+                      (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
+            return sum + ihp;
+          }, 0);
           
-          html += `Total Events: ${stateStats.count}<br>`;
-          html += `Total Funding: ${formattedFunding}<br><br>`;
+        const paTotal = filteredData
+          .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('pa'))
+          .reduce((sum, item) => {
+            const pa = typeof item.pa_total === 'number' ? item.pa_total : 
+                     (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
+            return sum + pa;
+          }, 0);
           
-          // Add funding breakdown by type if available
-          const ihpTotal = filteredData
-            .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('ihp'))
-            .reduce((sum, item) => {
-              const ihp = typeof item.ihp_total === 'number' ? item.ihp_total : 
-                        (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
-              return sum + ihp;
-            }, 0);
-            
-          const paTotal = filteredData
-            .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('pa'))
-            .reduce((sum, item) => {
-              const pa = typeof item.pa_total === 'number' ? item.pa_total : 
-                       (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
-              return sum + pa;
-            }, 0);
-            
-          const cdbgDrTotal = filteredData
-            .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('cdbg_dr_allocation'))
-            .reduce((sum, item) => {
-              const cdbgDr = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
-                           (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
-              return sum + cdbgDr;
-            }, 0);
-          
-          html += '<strong>Funding Breakdown:</strong><br>';
-          
-          if (selectedFundingTypes.includes('ihp')) {
-            const formattedIHP = new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD',
-              maximumFractionDigits: 0
-            }).format(ihpTotal);
-            html += `IHP: ${formattedIHP}<br>`;
-          }
-          
-          if (selectedFundingTypes.includes('pa')) {
-            const formattedPA = new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD',
-              maximumFractionDigits: 0
-            }).format(paTotal);
-            html += `PA: ${formattedPA}<br>`;
-          }
-          
-          if (selectedFundingTypes.includes('cdbg_dr_allocation')) {
-            const formattedCDBG = new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD',
-              maximumFractionDigits: 0
-            }).format(cdbgDrTotal);
-            html += `CDBG-DR: ${formattedCDBG}<br>`;
-          }
-          
-          html += '<br><strong>By Disaster Type:</strong><br>';
-          
-          Object.entries(stateStats.types)
-            .sort((a, b) => stateStats.typesFunding[b[0]] - stateStats.typesFunding[a[0]])
-            .forEach(([type, count]) => {
-              const typeFunding = new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                maximumFractionDigits: 0
-              }).format(stateStats.typesFunding[type]);
-              
-              html += `${type}: ${count} events (${typeFunding})<br>`;
-            });
-        } else {
-          html += 'No disaster data available';
-        }
+        const cdbgDrTotal = filteredData
+          .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('cdbg_dr_allocation'))
+          .reduce((sum, item) => {
+            const cdbgDr = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+                         (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
+            return sum + cdbgDr;
+          }, 0);
         
         // Create and store the popup
         popup.current = new maplibregl.Popup({
           closeButton: false,
-          closeOnClick: false
+          closeOnClick: false,
+          className: 'disaster-map-tooltip', // Add a custom class for styling
+          maxWidth: '250px', // Reduced from 300px
+          offset: 15
         })
           .setLngLat(e.lngLat)
-          .setHTML(html)
+          .setHTML(`
+            <div class="tooltip-container">
+              <div class="tooltip-header">
+                <h3>${stateName}</h3>
+              </div>
+              <div class="tooltip-content">
+                ${stateStats ? `
+                  <div class="tooltip-summary">
+                    <div class="tooltip-stat">
+                      <span class="tooltip-label">Events:</span>
+                      <span class="tooltip-value">${stateStats.count}</span>
+                    </div>
+                    <div class="tooltip-stat">
+                      <span class="tooltip-label">Total:</span>
+                      <span class="tooltip-value highlight">${formatCurrency(stateStats.funding)}</span>
+                    </div>
+                  </div>
+                  
+                  ${(selectedFundingTypes.includes('ihp') || selectedFundingTypes.includes('pa') || selectedFundingTypes.includes('cdbg_dr_allocation')) ? `
+                  <div class="tooltip-section">
+                    <h4>Funding</h4>
+                    <div class="tooltip-breakdown">
+                      ${selectedFundingTypes.includes('ihp') ? 
+                        `<div class="tooltip-stat">
+                          <span class="tooltip-label">IHP:</span>
+                          <span class="tooltip-value" style="color: #2171b5;">${formatCurrency(ihpTotal)}</span>
+                        </div>` : ''}
+                      
+                      ${selectedFundingTypes.includes('pa') ? 
+                        `<div class="tooltip-stat">
+                          <span class="tooltip-label">PA:</span>
+                          <span class="tooltip-value" style="color: #41B6E6;">${formatCurrency(paTotal)}</span>
+                        </div>` : ''}
+                      
+                      ${selectedFundingTypes.includes('cdbg_dr_allocation') ? 
+                        `<div class="tooltip-stat">
+                          <span class="tooltip-label">CDBG-DR:</span>
+                          <span class="tooltip-value" style="color: #89684F;">${formatCurrency(cdbgDrTotal)}</span>
+                        </div>` : ''}
+                    </div>
+                  </div>` : ''}
+                  
+                  <div class="tooltip-section">
+                    <h4>Top Disaster Types</h4>
+                    <div class="tooltip-types">
+                      ${Object.entries(stateStats.types)
+                        .sort((a, b) => stateStats.typesFunding[b[0]] - stateStats.typesFunding[a[0]])
+                        .slice(0, 3) // Show only top 3 disaster types
+                        .map(([type, count]) => `
+                          <div class="tooltip-disaster-type">
+                            <div class="tooltip-type-name">${type} <span class="event-count">(${count})</span></div>
+                            <div class="tooltip-type-funding">${formatCurrency(stateStats.typesFunding[type])}</div>
+                          </div>
+                        `).join('')}
+                    </div>
+                  </div>
+                ` : '<div class="tooltip-empty">No disaster data available</div>'}
+              </div>
+            </div>
+          `)
           .addTo(map.current);
+
+        // Add CSS styles to the document head if not already added
+        if (!document.getElementById('disaster-map-tooltip-styles')) {
+          const styleElement = document.createElement('style');
+          styleElement.id = 'disaster-map-tooltip-styles';
+          styleElement.textContent = `
+            .disaster-map-tooltip {
+              font-family: "Source Sans 3", "Source Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              border-radius: 6px;
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+              padding: 0;
+              border: none;
+              overflow: hidden;
+            }
+            .disaster-map-tooltip .maplibregl-popup-content {
+              padding: 0;
+              border-radius: 6px;
+              overflow: hidden;
+            }
+            .tooltip-container {
+              display: flex;
+              flex-direction: column;
+              max-width: 100%;
+            }
+            .tooltip-header {
+              background-color: #003A63;
+              color: white;
+              padding: 6px 10px;
+              border-bottom: 1px solid #004d84;
+            }
+            .tooltip-header h3 {
+              margin: 0;
+              font-size: 14px;
+              font-weight: 600;
+            }
+            .tooltip-content {
+              padding: 8px;
+              font-size: 11px;
+            }
+            .tooltip-summary {
+              margin-bottom: 6px;
+              padding-bottom: 6px;
+              border-bottom: 1px solid #eaeaea;
+            }
+            .tooltip-section {
+              margin-top: 6px;
+            }
+            .tooltip-section h4 {
+              margin: 0 0 4px 0;
+              font-size: 12px;
+              font-weight: 600;
+              color: #003A63;
+            }
+            .tooltip-stat {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 2px;
+            }
+            .tooltip-label {
+              color: #555;
+              font-weight: 500;
+            }
+            .tooltip-value {
+              font-weight: 600;
+            }
+            .tooltip-value.highlight {
+              color: #00A79D;
+              font-weight: 700;
+            }
+            .tooltip-disaster-type {
+              border-top: 1px solid #f0f0f0;
+              padding: 3px 0;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+            .tooltip-type-name {
+              font-weight: 600;
+              font-size: 11px;
+            }
+            .event-count {
+              font-weight: normal;
+              color: #666;
+              font-size: 10px;
+            }
+            .tooltip-type-funding {
+              font-weight: 600;
+              color: #00A79D;
+              font-size: 11px;
+            }
+            .tooltip-empty {
+              color: #777;
+              font-style: italic;
+              padding: 6px 0;
+              font-size: 11px;
+            }
+          `;
+          document.head.appendChild(styleElement);
+        }
       });
       
       // Change cursor on hover
@@ -771,6 +877,24 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
         className="w-full rounded-lg shadow-md" 
         style={{ height: '500px' }} // Increased from previous height
       />
+      
+      {/* Zoom control buttons */}
+      <div className="absolute bottom-4 left-4 flex flex-col space-y-2 z-10">
+        <button 
+          onClick={() => map.current?.zoomIn()} 
+          className="bg-white w-8 h-8 rounded shadow-md flex items-center justify-center hover:bg-gray-100 text-[#003A63] font-bold text-lg"
+          title="Zoom in"
+        >
+          +
+        </button>
+        <button 
+          onClick={() => map.current?.zoomOut()} 
+          className="bg-white w-8 h-8 rounded shadow-md flex items-center justify-center hover:bg-gray-100 text-[#003A63] font-bold text-lg"
+          title="Zoom out"
+        >
+          −
+        </button>
+      </div>
       
       {/* Update the legend to be linear instead of discrete boxes */}
       <div className="absolute bottom-4 right-4 bg-white p-3 rounded shadow-md z-10 text-xs">

@@ -23,13 +23,12 @@ interface DisasterData {
 
 const DisasterDataDownloader = () => {
   const [data, setData] = useState<DisasterData[]>([]);
-  const [filteredData, setFilteredData] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({
-    startYear: 2003,
+    startYear: 2015,
     startMonth: 1,
-    endYear: 2025,
-    endMonth: 12
+    endYear: new Date().getFullYear(),
+    endMonth: new Date().getMonth() + 1,
   });
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
@@ -90,51 +89,75 @@ const DisasterDataDownloader = () => {
     }
   }, [loading, data]);
 
-  useEffect(() => {
-    if (!loading) {
-      const filtered = data.filter(row => {
-        if (!row.incident_start) return false;
+  // Memoize the filtered data based on filters
+  const filteredData = useMemo(() => {
+    if (loading) return [];
+    
+    return data.filter(row => {
+      if (!row.incident_start) return false;
+      
+      const incidentDate = new Date(row.incident_start);
+      const startDate = new Date(dateRange.startYear, dateRange.startMonth - 1, 1);
+      const endDate = new Date(dateRange.endYear, dateRange.endMonth, 0);
+      
+      const dateMatch = incidentDate >= startDate && incidentDate <= endDate;
+      
+      // Handle territories as a special case
+      let stateMatch = false;
+      if (selectedStates.length === 0) {
+        stateMatch = true; // No states selected means all states match
+      } else if (territories.includes(row.state) && includesTerritories) {
+        stateMatch = true; // Include territories if the territories option is selected
+      } else {
+        stateMatch = selectedStates.includes(row.state); // Normal state matching
+      }
+      
+      const typeMatch = selectedDisasterTypes.length === 0 || selectedDisasterTypes.includes(row.incident_type);
+      
+      // Add funding type matching
+      let fundingMatch = true;
+      if (selectedFundingTypes.length > 0) {
+        // Convert funding values to numbers and check if any selected funding type has a value > 0
+        fundingMatch = false;
         
-        const incidentDate = new Date(row.incident_start);
-        const startDate = new Date(dateRange.startYear, dateRange.startMonth - 1, 1);
-        const endDate = new Date(dateRange.endYear, dateRange.endMonth, 0);
-        
-        const dateMatch = incidentDate >= startDate && incidentDate <= endDate;
-        
-        // Handle territories as a special case
-        let stateMatch = false;
-        if (selectedStates.length === 0) {
-          stateMatch = true; // No states selected means all states match
-        } else if (territories.includes(row.state) && includesTerritories) {
-          stateMatch = true; // Include territories if the territories option is selected
-        } else {
-          stateMatch = selectedStates.includes(row.state); // Normal state matching
+        if (selectedFundingTypes.includes('ihp')) {
+          const ihpValue = typeof row.ihp_total === 'number' ? row.ihp_total : 
+                       (typeof row.ihp_total === 'string' ? parseFloat(row.ihp_total) || 0 : 0);
+          if (ihpValue > 0) fundingMatch = true;
         }
         
-        const typeMatch = selectedDisasterTypes.length === 0 || selectedDisasterTypes.includes(row.incident_type);
+        if (!fundingMatch && selectedFundingTypes.includes('pa')) {
+          const paValue = typeof row.pa_total === 'number' ? row.pa_total : 
+                      (typeof row.pa_total === 'string' ? parseFloat(row.pa_total) || 0 : 0);
+          if (paValue > 0) fundingMatch = true;
+        }
         
-        return dateMatch && stateMatch && typeMatch;
-      });
-
-      setFilteredData(filtered);
-    }
-  }, [dateRange, selectedStates, selectedDisasterTypes, data, loading, includesTerritories]);
+        if (!fundingMatch && selectedFundingTypes.includes('cdbg_dr_allocation')) {
+          const cdbgValue = typeof row.cdbg_dr_allocation === 'number' ? row.cdbg_dr_allocation : 
+                          (typeof row.cdbg_dr_allocation === 'string' ? parseFloat(row.cdbg_dr_allocation) || 0 : 0);
+          if (cdbgValue > 0) fundingMatch = true;
+        }
+      }
+      
+      return dateMatch && stateMatch && typeMatch && fundingMatch;
+    });
+  }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes, data, loading, includesTerritories, territories]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes]);
 
-  // Debug logging for map data
-  useEffect(() => {
-    console.log('Passing to map - filtered data sample:', filteredData.slice(0, 3));
-    console.log('Passing to map - total records:', filteredData.length);
-  }, [filteredData]);
-
   const handleDownload = () => {
+    // Check if there's any data to download
+    if (filteredData.length === 0 || selectedFundingTypes.length === 0) {
+      alert('No data to download. Please select at least one funding type and ensure data matches your filters.');
+      return;
+    }
+
+    // Use the already filtered data directly since we've incorporated funding type filtering
     const processedData = filteredData.map(row => ({
       ...row,
-      state: stateNames[row.state as keyof typeof stateNames] || 
-             row.state
+      state: stateNames[row.state as keyof typeof stateNames] || row.state
     }));
 
     const csv = Papa.unparse(processedData);
@@ -217,19 +240,6 @@ const DisasterDataDownloader = () => {
             </div>
             <div className="max-h-60 overflow-y-auto p-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {/* Add Territories as a special option */}
-                <label className="flex items-center space-x-2 bg-gray-100 p-1 rounded">
-                  <input
-                    type="checkbox"
-                    checked={includesTerritories}
-                    onChange={(e) => {
-                      setIncludesTerritories(e.target.checked);
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm font-medium">U.S. Territories</span>
-                </label>
-                
                 {Object.entries(stateNames).map(([abbr, name]) => (
                   <label key={abbr} className="flex items-center space-x-2">
                     <input
@@ -247,6 +257,19 @@ const DisasterDataDownloader = () => {
                     <span className="text-sm">{name}</span>
                   </label>
                 ))}
+                
+                {/* Add Territories as a special option at the end */}
+                <label className="flex items-center space-x-2 bg-gray-100 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={includesTerritories}
+                    onChange={(e) => {
+                      setIncludesTerritories(e.target.checked);
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm font-medium">U.S. Territories</span>
+                </label>
               </div>
             </div>
           </div>

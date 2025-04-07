@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Brush,
-  ReferenceArea,
   Text
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
@@ -142,12 +141,22 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
       const startDate = new Date(startItem.date);
       const endDate = new Date(endItem.date);
       
-      onDateRangeChange({
+      const newDateRange = {
         startYear: startDate.getFullYear(),
         startMonth: startDate.getMonth() + 1,
         endYear: endDate.getFullYear(),
         endMonth: endDate.getMonth() + 1
-      });
+      };
+      
+      // Only update if the date range has actually changed
+      if (
+        newDateRange.startYear !== dateRange.startYear ||
+        newDateRange.startMonth !== dateRange.startMonth ||
+        newDateRange.endYear !== dateRange.endYear ||
+        newDateRange.endMonth !== dateRange.endMonth
+      ) {
+        onDateRangeChange(newDateRange);
+      }
     } catch (e) {
       console.error("Error updating date range:", e);
     }
@@ -199,9 +208,11 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
         </div>
       </div>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
+        <BarChart
           data={timeSeriesData}
           margin={{ top: 40, right: 30, left: 0, bottom: 0 }}
+          barCategoryGap={1} // Set to 1 for histogram-like appearance
+          barGap={0}
         >
           <defs>
             <linearGradient id="colorFunding" x1="0" y1="0" x2="0" y2="1">
@@ -216,11 +227,13 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
             type="category"
             allowDuplicatedCategory={false}
             height={30}
+            fontSize={11} // Smaller font for axis labels
           />
           <YAxis 
-            tickFormatter={(value) => `$${(value / 1000000).toFixed(0)}M`}
+            tickFormatter={(value) => value === 0 ? '$0M' : `$${(value / 1000000).toFixed(0)}M`}
             height={50}
-            width={60}
+            width={70} // Wider for the dollar signs
+            fontSize={11} // Smaller font size
           />
           <Tooltip 
             formatter={formatTooltip}
@@ -245,12 +258,10 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
               {selectedRange}
             </text>
           )}
-          <Area 
-            type="monotone" 
+          <Bar 
             dataKey="totalFunding" 
-            stroke="#41B6E6" 
             fill="url(#colorFunding)"
-            fillOpacity={0.8}
+            stroke="#41B6E6"
             isAnimationActive={false}
           />
           <Brush 
@@ -267,7 +278,7 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
             travellerWidth={10}
             alwaysShowText={true}
           />
-        </AreaChart>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );
