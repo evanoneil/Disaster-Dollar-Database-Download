@@ -11,18 +11,21 @@ interface StormData {
   paTotal: number;
   cdbgDrTotal: number;
   totalFunding: number;
+  date?: string; // Optional date field
 }
 
 interface DisasterFundingChartProps {
   data: StormData[];
   title?: string;
   subtitle?: string;
+  dateRange?: string; // New prop for date range
 }
 
 const DisasterFundingChart: React.FC<DisasterFundingChartProps> = ({ 
   data, 
   title = '',
-  subtitle = ''
+  subtitle = '',
+  dateRange
 }) => {
   // Format numbers to human-readable form (e.g., $1.2B)
   const formatNumber = (value: number) => {
@@ -62,6 +65,13 @@ const DisasterFundingChart: React.FC<DisasterFundingChartProps> = ({
     return Math.max(baseHeight, 300 + sortedData.length * heightPerItem);
   };
 
+  // Create the subtitle with date range
+  const formattedSubtitle = subtitle || `Top 10 disasters by funding amount, ${dateRange}`;
+
+  // Calculate current year for reference
+  const currentYear = new Date().getFullYear();
+  const defaultSubtitle = `Top 10 disasters by funding amount, ${currentYear-9}-${currentYear}`;
+
   const options: Highcharts.Options = {
     chart: {
       type: 'bar',
@@ -87,7 +97,7 @@ const DisasterFundingChart: React.FC<DisasterFundingChartProps> = ({
       margin: 30
     },
     subtitle: {
-      text: 'Top 10 disasters by funding amount',
+      text: "Top 10 disasters by funding amount, 2016-2025",
       style: {
         fontSize: '14px',
         fontWeight: 'bold',
