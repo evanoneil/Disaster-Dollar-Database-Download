@@ -1,11 +1,11 @@
-import DisasterDataDownloader from '@/components/DisasterDataDownloader'
+import FactSheetCreator from '@/components/FactSheetCreator'
 import Navigation from '@/components/Navigation'
 
-export default function Home() {
+export default function FactSheetPage() {
   return (
     <main className="min-h-screen bg-gray-50 py-8">
       <Navigation />
-      <DisasterDataDownloader />
+      <FactSheetCreator />
     </main>
   )
-}
+} 
