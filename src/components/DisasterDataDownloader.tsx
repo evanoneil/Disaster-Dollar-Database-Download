@@ -199,6 +199,103 @@ const DisasterDataDownloader = () => {
             onDateRangeChange={setDateRange} 
           />
         )}
+        
+        {/* Total Funding Summary */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Total Disaster Funding</h2>
+          <div className="bg-[#f8fafc] border border-[#E6E7E8] rounded-lg p-4">
+            {(() => {
+              // Calculate totals for all funding types
+              const totalIHP = filteredData.reduce((sum, item) => {
+                const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total : 
+                            (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
+                return sum + (selectedFundingTypes.includes('ihp') ? ihpTotal : 0);
+              }, 0);
+              
+              const totalPA = filteredData.reduce((sum, item) => {
+                const paTotal = typeof item.pa_total === 'number' ? item.pa_total : 
+                           (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
+                return sum + (selectedFundingTypes.includes('pa') ? paTotal : 0);
+              }, 0);
+              
+              const totalCDBG = filteredData.reduce((sum, item) => {
+                const cdbgTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+                               (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
+                return sum + (selectedFundingTypes.includes('cdbg_dr_allocation') ? cdbgTotal : 0);
+              }, 0);
+              
+              const grandTotal = totalIHP + totalPA + totalCDBG;
+              
+              // Helper function to format currency
+              const formatCurrency = (amount: number): string => {
+                return new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                  maximumFractionDigits: 0
+                }).format(amount);
+              };
+
+              return (
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="md:flex-1 flex flex-col md:flex-row gap-3">
+                    {/* Number of Disaster Events Box */}
+                    <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
+                      <h3 className="text-xl font-bold text-[#003A63] mb-2">Disaster Events</h3>
+                      <p className="text-3xl font-bold text-[#003A63]">{formatNumber(filteredData.length)}</p>
+                      <p className="text-sm text-gray-500 mt-1">Total events matching filters</p>
+                    </div>
+                    
+                    {/* Grand Total Box */}
+                    <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
+                      <h3 className="text-xl font-bold text-[#003A63] mb-2">Grand Total</h3>
+                      <p className="text-3xl font-bold text-[#00A79D]">{formatCurrency(grandTotal)}</p>
+                      <p className="text-sm text-gray-500 mt-1">All selected funding types</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-full">
+                      {selectedFundingTypes.includes('ihp') && (
+                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
+                          <div>
+                            <h4 className="text-sm font-semibold text-[#003A63]">Individual & Household<br />Program Total</h4>
+                            <p className="text-xl font-bold text-[#2171b5] mt-1">{formatCurrency(totalIHP)}</p>
+                          </div>
+                          <div></div> {/* Empty div for consistent spacing */}
+                        </div>
+                      )}
+                      
+                      {selectedFundingTypes.includes('pa') && (
+                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
+                          <div>
+                            <h4 className="text-sm font-semibold text-[#003A63]">Public<br />Assistance Total</h4>
+                            <p className="text-xl font-bold text-[#41B6E6] mt-1">{formatCurrency(totalPA)}</p>
+                          </div>
+                          <div></div> {/* Empty div for consistent spacing */}
+                        </div>
+                      )}
+                      
+                      {selectedFundingTypes.includes('cdbg_dr_allocation') && (
+                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
+                          <div>
+                            <h4 className="text-sm font-semibold text-[#003A63]">CDBG-DR<br />Allocation Total</h4>
+                            <p className="text-xl font-bold text-[#89684F] mt-1">{formatCurrency(totalCDBG)}</p>
+                          </div>
+                          <div></div> {/* Empty div for consistent spacing */}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+              
+              // Helper function to format large numbers with commas
+              function formatNumber(num: number): string {
+                return new Intl.NumberFormat('en-US').format(num);
+              }
+            })()}
+          </div>
+        </div>
 
         {/* Map Section */}
         <div>
@@ -210,187 +307,196 @@ const DisasterDataDownloader = () => {
           />
         </div>
 
-        {/* Location Selection */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Location</h2>
-          <div className="border rounded-lg">
-            <div className="p-2 border-b flex justify-between items-center bg-gray-50">
-              <span className="text-sm font-medium text-[#003A63]">States & Territories</span>
-              <div className="space-x-2">
-                <button
-                  onClick={() => {
-                    const allStateAbbrs = Object.keys(stateNames);
-                    setSelectedStates(allStateAbbrs);
-                    setIncludesTerritories(true);
-                  }}
-                  className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
-                >
-                  Select All
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedStates([]);
-                    setIncludesTerritories(false);
-                  }}
-                  className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                >
-                  Deselect All
-                </button>
+        {/* Filter Sections - Flex layout for desktop */}
+        <div className="flex flex-col md:flex-row md:space-x-4">
+          {/* Location Selection */}
+          <div className="md:w-1/3 mb-6 md:mb-0">
+            <div className="border rounded-lg h-[320px] flex flex-col">
+              <div className="p-2 border-b flex justify-between items-center bg-gray-50">
+                <span className="text-sm font-medium text-[#003A63]">Filter by Location</span>
+                <div className="space-x-2">
+                  <button
+                    onClick={() => {
+                      const allStateAbbrs = Object.keys(stateNames);
+                      setSelectedStates(allStateAbbrs);
+                      setIncludesTerritories(true);
+                    }}
+                    className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedStates([]);
+                      setIncludesTerritories(false);
+                    }}
+                    className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                  >
+                    Deselect All
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="max-h-60 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {Object.entries(stateNames).map(([abbr, name]) => (
-                  <label key={abbr} className="flex items-center space-x-2">
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
+                  {Object.entries(stateNames).map(([abbr, name]) => (
+                    <label key={abbr} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedStates.includes(abbr)}
+                        onChange={(e) => {
+                          setSelectedStates(
+                            e.target.checked
+                              ? [...selectedStates, abbr]
+                              : selectedStates.filter(s => s !== abbr)
+                          );
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">{name}</span>
+                    </label>
+                  ))}
+                  
+                  {/* Add Territories as a special option at the end */}
+                  <label className="flex items-center space-x-2 bg-gray-100 p-1 rounded">
                     <input
                       type="checkbox"
-                      checked={selectedStates.includes(abbr)}
+                      checked={includesTerritories}
                       onChange={(e) => {
-                        setSelectedStates(
+                        setIncludesTerritories(e.target.checked);
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm font-medium">U.S. Territories</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Disaster Type Selection */}
+          <div className="md:w-1/3 mb-6 md:mb-0">
+            <div className="border rounded-lg h-[320px] flex flex-col">
+              <div className="p-2 border-b flex justify-between items-center bg-gray-50">
+                <span className="text-sm font-medium text-[#003A63]">Filter by Disaster Type</span>
+                <div className="space-x-2">
+                  <button
+                    onClick={() => {
+                      const allDisasterTypes = _.uniq(data.map(row => row.incident_type)).filter(Boolean).sort();
+                      setSelectedDisasterTypes(allDisasterTypes);
+                    }}
+                    className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={() => setSelectedDisasterTypes([])}
+                    className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-3">
+                  {_.uniq(data.map(row => row.incident_type)).filter(Boolean).sort().map(type => (
+                    <label key={type} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedDisasterTypes.includes(type)}
+                        onChange={(e) => {
+                          setSelectedDisasterTypes(
+                            e.target.checked
+                              ? [...selectedDisasterTypes, type]
+                              : selectedDisasterTypes.filter(t => t !== type)
+                          );
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">{type}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Funding Type Selection */}
+          <div className="md:w-1/3">
+            <div className="border rounded-lg h-[320px] flex flex-col">
+              <div className="p-2 border-b flex justify-between items-center bg-gray-50">
+                <span className="text-sm font-medium text-[#003A63]">Filter by Funding Type</span>
+                <div className="space-x-2">
+                  <button
+                    onClick={() => setSelectedFundingTypes(['ihp', 'pa', 'cdbg_dr_allocation'])}
+                    className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={() => setSelectedFundingTypes([])}
+                    className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex flex-col space-y-4">
+                  <label className="flex items-center space-x-2 p-2 border rounded-md hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedFundingTypes.includes('ihp')}
+                      onChange={(e) => {
+                        setSelectedFundingTypes(
                           e.target.checked
-                            ? [...selectedStates, abbr]
-                            : selectedStates.filter(s => s !== abbr)
+                            ? [...selectedFundingTypes, 'ihp']
+                            : selectedFundingTypes.filter(t => t !== 'ihp')
                         );
                       }}
                       className="rounded border-gray-300"
                     />
-                    <span className="text-sm">{name}</span>
+                    <div>
+                      <span className="text-sm font-medium">Individual & Household Program</span>
+                      <p className="text-xs text-gray-500 mt-1">FEMA assistance for individuals and families</p>
+                    </div>
                   </label>
-                ))}
-                
-                {/* Add Territories as a special option at the end */}
-                <label className="flex items-center space-x-2 bg-gray-100 p-1 rounded">
-                  <input
-                    type="checkbox"
-                    checked={includesTerritories}
-                    onChange={(e) => {
-                      setIncludesTerritories(e.target.checked);
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm font-medium">U.S. Territories</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Disaster Type Selection */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Disaster Types</h2>
-          <div className="border rounded-lg">
-            <div className="p-2 border-b flex justify-between items-center bg-gray-50">
-              <span className="text-sm font-medium text-[#003A63]">Incident Types</span>
-              <div className="space-x-2">
-                <button
-                  onClick={() => {
-                    const allDisasterTypes = _.uniq(data.map(row => row.incident_type)).filter(Boolean).sort();
-                    setSelectedDisasterTypes(allDisasterTypes);
-                  }}
-                  className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
-                >
-                  Select All
-                </button>
-                <button
-                  onClick={() => setSelectedDisasterTypes([])}
-                  className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                >
-                  Deselect All
-                </button>
-              </div>
-            </div>
-            <div className="p-4 max-h-60 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {_.uniq(data.map(row => row.incident_type)).filter(Boolean).sort().map(type => (
-                  <label key={type} className="flex items-center space-x-2">
+                  <label className="flex items-center space-x-2 p-2 border rounded-md hover:bg-gray-50">
                     <input
                       type="checkbox"
-                      checked={selectedDisasterTypes.includes(type)}
+                      checked={selectedFundingTypes.includes('pa')}
                       onChange={(e) => {
-                        setSelectedDisasterTypes(
+                        setSelectedFundingTypes(
                           e.target.checked
-                            ? [...selectedDisasterTypes, type]
-                            : selectedDisasterTypes.filter(t => t !== type)
+                            ? [...selectedFundingTypes, 'pa']
+                            : selectedFundingTypes.filter(t => t !== 'pa')
                         );
                       }}
                       className="rounded border-gray-300"
                     />
-                    <span className="text-sm">{type}</span>
+                    <div>
+                      <span className="text-sm font-medium">Public Assistance</span>
+                      <p className="text-xs text-gray-500 mt-1">Funding to repair infrastructure and public facilities</p>
+                    </div>
                   </label>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Funding Type Selection */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Funding Types</h2>
-          <div className="border rounded-lg">
-            <div className="p-2 border-b flex justify-between items-center bg-gray-50">
-              <span className="text-sm font-medium text-[#003A63]">Funding Programs</span>
-              <div className="space-x-2">
-                <button
-                  onClick={() => setSelectedFundingTypes(['ihp', 'pa', 'cdbg_dr_allocation'])}
-                  className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
-                >
-                  Select All
-                </button>
-                <button
-                  onClick={() => setSelectedFundingTypes([])}
-                  className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                >
-                  Deselect All
-                </button>
-              </div>
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedFundingTypes.includes('ihp')}
-                    onChange={(e) => {
-                      setSelectedFundingTypes(
-                        e.target.checked
-                          ? [...selectedFundingTypes, 'ihp']
-                          : selectedFundingTypes.filter(t => t !== 'ihp')
-                      );
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm">Individual & Household Program (IHP)</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedFundingTypes.includes('pa')}
-                    onChange={(e) => {
-                      setSelectedFundingTypes(
-                        e.target.checked
-                          ? [...selectedFundingTypes, 'pa']
-                          : selectedFundingTypes.filter(t => t !== 'pa')
-                      );
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm">Public Assistance (PA)</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedFundingTypes.includes('cdbg_dr_allocation')}
-                    onChange={(e) => {
-                      setSelectedFundingTypes(
-                        e.target.checked
-                          ? [...selectedFundingTypes, 'cdbg_dr_allocation']
-                          : selectedFundingTypes.filter(t => t !== 'cdbg_dr_allocation')
-                      );
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm">Community Development Block Grant (CDBG-DR)</span>
-                </label>
+                  <label className="flex items-center space-x-2 p-2 border rounded-md hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedFundingTypes.includes('cdbg_dr_allocation')}
+                      onChange={(e) => {
+                        setSelectedFundingTypes(
+                          e.target.checked
+                            ? [...selectedFundingTypes, 'cdbg_dr_allocation']
+                            : selectedFundingTypes.filter(t => t !== 'cdbg_dr_allocation')
+                        );
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <div>
+                      <span className="text-sm font-medium">CDBG-DR</span>
+                      <p className="text-xs text-gray-500 mt-1">Community Development Block Grant Disaster Recovery</p>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
@@ -409,7 +515,7 @@ const DisasterDataDownloader = () => {
             Download Selected Data
           </button>
         </div>
-
+        
         {/* Records Table */}
         <div className="mt-8 overflow-x-auto">
           <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Preview Records</h2>
