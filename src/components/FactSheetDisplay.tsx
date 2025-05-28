@@ -5,6 +5,7 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 import { Download, Share2 } from 'lucide-react';
 import { format, subYears } from 'date-fns';
 import DisasterFundingChart from './DisasterFundingChart';
+import FundingBreakdownChart from './FundingBreakdownChart';
 import * as Papa from 'papaparse';
 
 // We'll load these libraries when needed in the function
@@ -25,6 +26,47 @@ interface DisasterData {
   year: number | null;
   ihp_applicants?: number;
   ihp_average_award?: number;
+  // CDBG-DR grantee information
+  frn1_date?: string;
+  frn1_grantee1_name?: string;
+  frn1_grantee1_amount?: number;
+  frn1_grantee2_name?: string;
+  frn1_grantee2_amount?: number;
+  frn1_grantee3_name?: string;
+  frn1_grantee3_amount?: number;
+  frn1_grantee4_name?: string;
+  frn1_grantee4_amount?: number;
+  frn1_grantee5_name?: string;
+  frn1_grantee5_amount?: number;
+  frn1_grantee6_name?: string;
+  frn1_grantee6_amount?: number;
+  frn1_grantee7_name?: string;
+  frn1_grantee7_amount?: number;
+  frn1_grantee8_name?: string;
+  frn1_grantee8_amount?: number;
+  frn1_grantee9_name?: string;
+  frn1_grantee9_amount?: number;
+  frn2_date?: string;
+  frn2_grantee1_name?: string;
+  frn2_grantee1_amount?: number;
+  frn2_grantee2_name?: string;
+  frn2_grantee2_amount?: number;
+  frn2_grantee3_name?: string;
+  frn2_grantee3_amount?: number;
+  frn2_grantee4_name?: string;
+  frn2_grantee4_amount?: number;
+  frn3_date?: string;
+  frn3_grantee1_name?: string;
+  frn3_grantee1_amount?: number;
+  frn3_grantee2_name?: string;
+  frn3_grantee2_amount?: number;
+  frn3_grantee3_name?: string;
+  frn3_grantee3_amount?: number;
+  frn3_grantee4_name?: string;
+  frn3_grantee4_amount?: number;
+  frn4_date?: string;
+  frn4_grantee1_name?: string;
+  frn4_grantee1_amount?: number;
   // ... add other fields as needed
 }
 
@@ -762,19 +804,53 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
   
   // Filter congressional data based on selected states and apply sorting
   const relevantCongressionalData = useMemo(() => {
-    if (!congressionalData.length || !selectedEvents.length) return [];
+    if (!congressionalData.length) {
+      console.log('Congressional data debug:', {
+        congressionalDataLength: congressionalData.length,
+        reason: 'No congressional data'
+      });
+      return [];
+    }
     
-    // Get unique state abbreviations from selected events
-    const selectedStateAbbrs = Array.from(new Set(selectedEvents.map(e => e.state)));
+    // Get unique state abbreviations from selected events OR the primary event
+    let selectedStateAbbrs: string[] = [];
+    
+    if (selectedEvents.length > 0) {
+      // Multiple events selected
+      selectedStateAbbrs = Array.from(new Set(selectedEvents.map(e => e.state)));
+    } else {
+      // Single event - use the primary event's state
+      selectedStateAbbrs = [primaryEvent.state];
+    }
     
     // Get full state names for filtering
     const selectedStateNames = selectedStateAbbrs.map(abbr => 
       stateNames[abbr as keyof typeof stateNames] || abbr
     );
     
-    // Filter by selected states
+    console.log('Congressional data filtering:', {
+      selectedStateAbbrs,
+      selectedStateNames,
+      availableStatesInCongressionalData: [...new Set(congressionalData.map(d => d.state_name))].slice(0, 10)
+    });
+    
+    // Filter by selected states - check both state name and abbreviation
     const filteredData = congressionalData
-      .filter(item => selectedStateNames.includes(item.state_name));
+      .filter(item => 
+        selectedStateNames.includes(item.state_name) || 
+        selectedStateAbbrs.includes(item.state_name)
+      );
+    
+    console.log('Filtered congressional data:', {
+      originalCount: congressionalData.length,
+      filteredCount: filteredData.length,
+      sampleResults: filteredData.slice(0, 3).map(d => ({
+        state: d.state_name,
+        district: d.district_label,
+        rep: d.representative,
+        funding: d.total_funding
+      }))
+    });
     
     // Apply sorting based on current sort settings
     const sortedData = [...filteredData].sort((a, b) => {
@@ -790,7 +866,73 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
     });
     
     return sortedData.slice(0, 10); // Get top 10
-  }, [congressionalData, selectedEvents, stateNames, sortField, sortDirection]);
+  }, [congressionalData, selectedEvents, primaryEvent.state, stateNames, sortField, sortDirection]);
+
+  // Get state name from abbreviation
+  const getStateName = (abbr: string) => {
+    return stateNames[abbr as keyof typeof stateNames] || abbr;
+  };
+
+  // Extract CDBG-DR recipients for the selected event
+  const getCDBGRecipients = (event: DisasterData) => {
+    interface CDBGRecipient {
+      name: string;
+      totalAmount: number;
+      dates: string[];
+    }
+    
+    const recipientMap = new Map<string, { totalAmount: number; dates: string[] }>();
+    
+    // Helper function to add recipients from a specific FRN
+    const addRecipientsFromFRN = (frnNumber: number, frnDate?: string) => {
+      for (let i = 1; i <= 9; i++) {
+        const nameKey = `frn${frnNumber}_grantee${i}_name` as keyof DisasterData;
+        const amountKey = `frn${frnNumber}_grantee${i}_amount` as keyof DisasterData;
+        
+        const name = event[nameKey] as string;
+        const amount = event[amountKey] as number;
+        
+        if (name && amount && amount > 0) {
+          const trimmedName = name.trim();
+          const existingRecipient = recipientMap.get(trimmedName);
+          
+          if (existingRecipient) {
+            // Add to existing recipient
+            existingRecipient.totalAmount += amount;
+            if (frnDate && frnDate !== 'Unknown' && !existingRecipient.dates.includes(frnDate)) {
+              existingRecipient.dates.push(frnDate);
+            }
+          } else {
+            // Create new recipient entry
+            recipientMap.set(trimmedName, {
+              totalAmount: amount,
+              dates: frnDate && frnDate !== 'Unknown' ? [frnDate] : []
+            });
+          }
+        }
+      }
+    };
+    
+    // Extract from all FRNs
+    addRecipientsFromFRN(1, event.frn1_date);
+    addRecipientsFromFRN(2, event.frn2_date);
+    addRecipientsFromFRN(3, event.frn3_date);
+    addRecipientsFromFRN(4, event.frn4_date);
+    
+    // Convert map to array and sort by total amount (highest first)
+    const consolidatedRecipients: CDBGRecipient[] = Array.from(recipientMap.entries()).map(([name, data]) => {
+      // Sort dates chronologically
+      const sortedDates = data.dates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+      
+      return {
+        name,
+        totalAmount: data.totalAmount,
+        dates: sortedDates
+      };
+    });
+    
+    return consolidatedRecipients.sort((a, b) => b.totalAmount - a.totalAmount);
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 print:shadow-none relative" ref={factSheetRef}>
@@ -837,7 +979,7 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
               {primaryEvent.event || 'Unnamed Event'} (#{primaryEvent.incident_number})
             </h1>
             <div className="text-lg text-[#00A79D]">
-              {stateName} • {primaryEvent.incident_type} • {formatDate(primaryEvent.incident_start)}
+              {stateName} • {primaryEvent.incident_type} • Declaration Date: {formatDate(primaryEvent.declaration_date || primaryEvent.incident_start)}
             </div>
           </div>
         )}
@@ -875,96 +1017,75 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
               </p>
             </div>
           </div>
-          
-          {/* Congressional District Funding Section - Moved above comparison table */}
-          <div className="mb-8">
-            <h2 className="text-xl font-bold mb-4 text-[#003A63]">
-              Top Congressional Districts by Disaster Assistance (2021-Present)
-            </h2>
-            {congressionalDataLoading ? (
-              <div className="flex justify-center items-center h-24">
-                <p className="text-gray-500">Loading congressional data...</p>
-              </div>
-            ) : relevantCongressionalData.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200 rounded-md">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="py-2 px-4 border-b text-left">Representative</th>
-                      <th className="py-2 px-4 border-b text-left">District</th>
-                      <th className="py-2 px-4 border-b text-left">Party</th>
-                      <th 
-                        className="py-2 px-4 border-b text-right cursor-pointer group"
-                        onClick={() => toggleSort('funding')}
-                      >
-                        <div className="flex items-center justify-end">
-                          Total Funding
-                          <span className="ml-1">
-                            {sortField === 'funding' ? (
-                              sortDirection === 'desc' ? '▼' : '▲'
-                            ) : ''}
-                          </span>
-                        </div>
-                      </th>
-                      <th 
-                        className="py-2 px-4 border-b text-right cursor-pointer group"
-                        onClick={() => toggleSort('applicants')}
-                      >
-                        <div className="flex items-center justify-end">
-                          Applicants
-                          <span className="ml-1">
-                            {sortField === 'applicants' ? (
-                              sortDirection === 'desc' ? '▼' : '▲'
-                            ) : ''}
-                          </span>
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {relevantCongressionalData.map((district, index) => (
-                      <tr key={`${district.state_name}-${district.district_number}`} 
-                          className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="py-2 px-4 border-b">
-                          {district.representative || 'Unknown'}
-                        </td>
-                        <td className="py-2 px-4 border-b">
-                          {district.district_label || `${district.state_name} District ${district.district_number}`}
-                        </td>
-                        <td className="py-2 px-4 border-b">
-                          <span className={`px-2 py-1 text-xs font-medium rounded ${
-                            district.party === 'Republican' 
-                              ? 'bg-red-100 text-red-800' 
-                              : district.party === 'Democratic' 
-                                ? 'bg-blue-100 text-blue-800' 
-                                : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {district.party || 'Unknown'}
-                          </span>
-                        </td>
-                        <td className="py-2 px-4 border-b text-right font-medium">
-                          {formatCurrency(district.total_funding || 0)}
-                        </td>
-                        <td className="py-2 px-4 border-b text-right">
-                          {formatNumber(district.total_applicants || 0)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="mt-2 text-xs text-gray-500">
-                  Click column headers to sort by funding or applicants
+        </div>
+      ) : null}
+      
+      {/* Total Funding by Source Section - Moved to top */}
+      {(() => {
+        // Calculate funding totals based on selection type
+        let totalIHP = 0;
+        let totalPA = 0;
+        let totalCDBG = 0;
+        
+        if (multipleEventsSelected && combinedFundingStats) {
+          // For multiple events, use the combined stats
+          totalIHP = combinedFundingStats.grandTotals.ihpTotal;
+          totalPA = combinedFundingStats.grandTotals.paTotal;
+          totalCDBG = combinedFundingStats.grandTotals.cdbgDrTotal;
+        } else {
+          // For single event, use only the selected event's data
+          totalIHP = typeof primaryEvent.ihp_total === 'number' ? primaryEvent.ihp_total : 
+                    (typeof primaryEvent.ihp_total === 'string' ? parseFloat(primaryEvent.ihp_total) || 0 : 0);
+          totalPA = typeof primaryEvent.pa_total === 'number' ? primaryEvent.pa_total : 
+                   (typeof primaryEvent.pa_total === 'string' ? parseFloat(primaryEvent.pa_total) || 0 : 0);
+          totalCDBG = typeof primaryEvent.cdbg_dr_allocation === 'number' ? primaryEvent.cdbg_dr_allocation : 
+                     (typeof primaryEvent.cdbg_dr_allocation === 'string' ? parseFloat(primaryEvent.cdbg_dr_allocation) || 0 : 0);
+        }
+        
+        const grandTotal = totalIHP + totalPA + totalCDBG;
+        
+        // Only show if there's actually funding data
+        if (grandTotal > 0) {
+          return (
+            <div className="mb-8 border-t pt-8">
+              <h2 className="text-xl font-bold mb-4 text-[#003A63]">Total Funding by Source</h2>
+              
+              {/* Summary cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+                <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col h-24 justify-end">
+                  <h4 className="text-sm font-semibold text-[#003A63] mb-2 line-clamp-2">Grand Total</h4>
+                  <p className="text-xl font-bold text-[#00A79D] mt-auto">{formatCurrency(grandTotal)}</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col h-24 justify-end">
+                  <h4 className="text-sm font-semibold text-[#003A63] mb-2 line-clamp-2">FEMA Individual & Household Program</h4>
+                  <p className="text-xl font-bold text-[#2171b5] mt-auto">{formatCurrency(totalIHP)}</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col h-24 justify-end">
+                  <h4 className="text-sm font-semibold text-[#003A63] mb-2 line-clamp-2">FEMA Public Assistance</h4>
+                  <p className="text-xl font-bold text-[#41B6E6] mt-auto">{formatCurrency(totalPA)}</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col h-24 justify-end">
+                  <h4 className="text-sm font-semibold text-[#003A63] mb-2 line-clamp-2">HUD CDBG-DR</h4>
+                  <p className="text-xl font-bold text-[#89684F] mt-auto">{formatCurrency(totalCDBG)}</p>
                 </div>
               </div>
-            ) : (
-              <div className="p-4 border rounded-md bg-gray-50 text-center">
-                <p className="text-gray-600">No congressional district data available for the selected states.</p>
+              
+              {/* Chart visualization */}
+              <div className="mb-4">
+                <FundingBreakdownChart 
+                  ihpTotal={totalIHP}
+                  paTotal={totalPA}
+                  cdbgTotal={totalCDBG}
+                />
               </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        // Show standard single-event stats if only one event is selected
+            </div>
+          );
+        }
+        return null;
+      })()}
+      
+      {/* Stats Section for single events - Moved below Total Funding by Source */}
+      {!multipleEventsSelected && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-gray-100 p-4 rounded-md">
             <h3 className="text-3xl font-bold text-[#00A79D]">
@@ -995,164 +1116,77 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
         </div>
       )}
       
-      {/* Annual Funding Stats - Display for both single and multiple events */}
-      <div className="mb-8 bg-gray-50 p-6 rounded-lg">
-        <h3 className="text-3xl font-bold text-[#003A63] mb-2">
-          {formatCurrency(federalSpendStats.annualAverage, true)}
-        </h3>
-        <p className="text-gray-700 mb-4">
-          {federalSpendStats.yearsSpan <= 1 ? (
-            // For a single year or less
-            `In ${federalSpendStats.latestYear}, the federal government allocated ${formatCurrency(federalSpendStats.totalFunding)} to ${stateName} for disaster recovery.`
-          ) : (
-            // For multiple years
-            `Between ${federalSpendStats.earliestYear} and ${federalSpendStats.latestYear}, the federal government has provided an average of ${formatCurrency(federalSpendStats.annualAverage)} per year to ${stateName} for disaster recovery, totaling ${formatCurrency(federalSpendStats.totalFunding)} over ${federalSpendStats.yearsSpan} years.`
-          )}
-        </p>
-        <div className="text-xs text-gray-500">
-          Note: This analysis includes {stateEvents.length} disaster events recorded in the database for {stateName}.
-        </div>
-      </div>
+      {/* HUD CDBG-DR Recipients Section - For single events only */}
+      {!multipleEventsSelected && (() => {
+        const cdbgRecipients = getCDBGRecipients(primaryEvent);
+        const hasCDBGData = cdbgRecipients.length > 0;
+        
+        return hasCDBGData ? (
+          <div className="mb-8 border-t pt-8 border-b pb-8">
+            <h2 className="text-xl font-bold mb-4 text-[#003A63]">
+              HUD CDBG-DR Grant Recipients
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border border-gray-200 rounded-md">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="py-3 px-4 border-b text-left font-semibold">Recipient</th>
+                    <th className="py-3 px-4 border-b text-right font-semibold">Total Grant Amount</th>
+                    <th className="py-3 px-4 border-b text-left font-semibold">Award Dates</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cdbgRecipients.map((recipient, index) => (
+                    <tr key={`${recipient.name}-${index}`} 
+                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="py-3 px-4 border-b">
+                        <div className="font-medium text-gray-900">
+                          {recipient.name}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 border-b text-right">
+                        <div className="font-bold text-[#00A79D]">
+                          {formatCurrency(recipient.totalAmount)}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 border-b">
+                        <div className="text-gray-700">
+                          {recipient.dates.length > 0 ? recipient.dates.map(date => formatDate(date)).join(', ') : 'Unknown'}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {cdbgRecipients.length > 1 && (
+                    <tr className="bg-gray-100 font-bold">
+                      <td className="py-3 px-4 border-t border-gray-300">
+                        Total CDBG-DR Funding
+                      </td>
+                      <td className="py-3 px-4 border-t border-gray-300 text-right text-[#003A63]">
+                        {formatCurrency(cdbgRecipients.reduce((sum, r) => sum + r.totalAmount, 0))}
+                      </td>
+                      <td className="py-3 px-4 border-t border-gray-300"></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null;
+      })()}
       
       {/* Major Storms Section - Using Highcharts */}
-      <div>
+      <div className="mb-8 border-b pb-8">
         <h2 className="text-xl font-bold mb-4 text-[#003A63]">
-          Funding for Major Storms by Source
+          Funding for Major Disasters by Source in {stateName}
         </h2>
         <DisasterFundingChart 
           data={majorStormsData.data}
           dateRange={majorStormsData.dateRange}
           title=""
         />
-        
-        {/* Total Funding by Source */}
-        {majorStormsData.data.length > 0 && (
-          <div className="mt-4 border-t pt-4">
-            <h3 className="text-lg font-semibold text-[#003A63] mb-2">Total Funding by Source</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              {(() => {
-                // Calculate total funding by source
-                const totalIHP = majorStormsData.data.reduce((sum, event) => sum + (event.ihpTotal || 0), 0);
-                const totalPA = majorStormsData.data.reduce((sum, event) => sum + (event.paTotal || 0), 0);
-                const totalCDBG = majorStormsData.data.reduce((sum, event) => sum + (event.cdbgDrTotal || 0), 0);
-                const grandTotal = totalIHP + totalPA + totalCDBG;
-                
-                return (
-                  <>
-                    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                      <h4 className="text-sm font-semibold text-[#003A63]">Grand Total</h4>
-                      <p className="text-xl font-bold text-[#00A79D]">{formatCurrency(grandTotal)}</p>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                      <h4 className="text-sm font-semibold text-[#003A63]">Individual & Household Program</h4>
-                      <p className="text-xl font-bold text-[#2171b5]">{formatCurrency(totalIHP)}</p>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                      <h4 className="text-sm font-semibold text-[#003A63]">Public Assistance</h4>
-                      <p className="text-xl font-bold text-[#41B6E6]">{formatCurrency(totalPA)}</p>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                      <h4 className="text-sm font-semibold text-[#003A63]">Community Development Block Grant</h4>
-                      <p className="text-xl font-bold text-[#89684F]">{formatCurrency(totalCDBG)}</p>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
       </div>
       
-      {/* Congressional District Funding Section - Only show if not already shown above */}
-      {!multipleEventsSelected && (
-        <div className="mb-8">
-          <h2 className="text-xl font-bold mb-4 text-[#003A63]">
-            Top Congressional Districts by Disaster Assistance (2021-Present)
-          </h2>
-          {congressionalDataLoading ? (
-            <div className="flex justify-center items-center h-24">
-              <p className="text-gray-500">Loading congressional data...</p>
-            </div>
-          ) : relevantCongressionalData.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border border-gray-200 rounded-md">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="py-2 px-4 border-b text-left">Representative</th>
-                    <th className="py-2 px-4 border-b text-left">District</th>
-                    <th className="py-2 px-4 border-b text-left">Party</th>
-                    <th 
-                      className="py-2 px-4 border-b text-right cursor-pointer group"
-                      onClick={() => toggleSort('funding')}
-                    >
-                      <div className="flex items-center justify-end">
-                        Total Funding
-                        <span className="ml-1">
-                          {sortField === 'funding' ? (
-                            sortDirection === 'desc' ? '▼' : '▲'
-                          ) : ''}
-                        </span>
-                      </div>
-                    </th>
-                    <th 
-                      className="py-2 px-4 border-b text-right cursor-pointer group"
-                      onClick={() => toggleSort('applicants')}
-                    >
-                      <div className="flex items-center justify-end">
-                        Applicants
-                        <span className="ml-1">
-                          {sortField === 'applicants' ? (
-                            sortDirection === 'desc' ? '▼' : '▲'
-                          ) : ''}
-                        </span>
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {relevantCongressionalData.map((district, index) => (
-                    <tr key={`${district.state_name}-${district.district_number}`} 
-                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="py-2 px-4 border-b">
-                        {district.representative || 'Unknown'}
-                      </td>
-                      <td className="py-2 px-4 border-b">
-                        {district.district_label || `${district.state_name} District ${district.district_number}`}
-                      </td>
-                      <td className="py-2 px-4 border-b">
-                        <span className={`px-2 py-1 text-xs font-medium rounded ${
-                          district.party === 'Republican' 
-                            ? 'bg-red-100 text-red-800' 
-                            : district.party === 'Democratic' 
-                              ? 'bg-blue-100 text-blue-800' 
-                              : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {district.party || 'Unknown'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-4 border-b text-right font-medium">
-                        {formatCurrency(district.total_funding || 0)}
-                      </td>
-                      <td className="py-2 px-4 border-b text-right">
-                        {formatNumber(district.total_applicants || 0)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="mt-2 text-xs text-gray-500">
-                Click column headers to sort by funding or applicants
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 border rounded-md bg-gray-50 text-center">
-              <p className="text-gray-600">No congressional district data available for the selected states.</p>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* All Selected Disasters comparison table - moved to the end of the page */}
+      {/* All Selected Disasters comparison table */}
       {multipleEventsSelected && combinedFundingStats && (
         <div className="overflow-x-auto mb-8">
           <h3 className="text-lg font-bold mb-2 text-[#003A63]">All Selected Disasters</h3>
@@ -1192,6 +1226,113 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
           </table>
         </div>
       )}
+      
+      {/* Congressional District Section - Shows for both single and multiple events */}
+      <div className="mb-8">
+        <h2 className="text-xl font-bold mb-4 text-[#003A63]">
+          Top Congressional Districts in {stateName} by Disaster Assistance (2021-Present)
+        </h2>
+        
+        {congressionalDataLoading ? (
+          <div className="flex justify-center items-center h-24">
+            <p className="text-gray-500">Loading congressional data...</p>
+          </div>
+        ) : relevantCongressionalData.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full bg-white border border-gray-200 rounded-md">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="py-2 px-4 border-b text-left">Representative</th>
+                  <th className="py-2 px-4 border-b text-left">District</th>
+                  <th className="py-2 px-4 border-b text-left">Party</th>
+                  <th 
+                    className="py-2 px-4 border-b text-right cursor-pointer group"
+                    onClick={() => toggleSort('funding')}
+                  >
+                    <div className="flex items-center justify-end">
+                      Total Funding
+                      <span className="ml-1">
+                        {sortField === 'funding' ? (
+                          sortDirection === 'desc' ? '▼' : '▲'
+                        ) : ''}
+                      </span>
+                    </div>
+                  </th>
+                  <th 
+                    className="py-2 px-4 border-b text-right cursor-pointer group"
+                    onClick={() => toggleSort('applicants')}
+                  >
+                    <div className="flex items-center justify-end">
+                      Applicants
+                      <span className="ml-1">
+                        {sortField === 'applicants' ? (
+                          sortDirection === 'desc' ? '▼' : '▲'
+                        ) : ''}
+                      </span>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {relevantCongressionalData.map((district, index) => (
+                  <tr key={`${district.state_name}-${district.district_number}`} 
+                      className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="py-2 px-4 border-b">
+                      {district.representative || 'Unknown'}
+                    </td>
+                    <td className="py-2 px-4 border-b">
+                      {district.district_label || `${district.state_name} District ${district.district_number}`}
+                    </td>
+                    <td className="py-2 px-4 border-b">
+                      <span className={`px-2 py-1 text-xs font-medium rounded ${
+                        district.party === 'Republican' 
+                          ? 'bg-red-100 text-red-800' 
+                          : district.party === 'Democratic' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {district.party || 'Unknown'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-4 border-b text-right font-medium">
+                      {formatCurrency(district.total_funding || 0)}
+                    </td>
+                    <td className="py-2 px-4 border-b text-right">
+                      {formatNumber(district.total_applicants || 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-2 text-xs text-gray-500">
+              Click column headers to sort by funding or applicants
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 border rounded-md bg-gray-50 text-center">
+            <p className="text-gray-600">No congressional district data available for the selected states.</p>
+          </div>
+        )}
+      </div>
+      
+      {/* Annual Funding Stats - Display for both single and multiple events */}
+      <div className="mb-8 bg-gray-50 p-6 rounded-lg">
+        <h3 className="text-3xl font-bold text-[#003A63] mb-2">
+          {formatCurrency(federalSpendStats.annualAverage, true)}
+        </h3>
+        <p className="text-gray-700 mb-4">
+          {federalSpendStats.yearsSpan <= 1 ? (
+            // For a single year or less
+            `In ${federalSpendStats.latestYear}, the federal government allocated ${formatCurrency(federalSpendStats.totalFunding)} to ${stateName} for disaster recovery.`
+          ) : (
+            // For multiple years
+            `Between ${federalSpendStats.earliestYear} and ${federalSpendStats.latestYear}, the federal government has provided an average of ${formatCurrency(federalSpendStats.annualAverage)} per year to ${stateName} for disaster recovery, totaling ${formatCurrency(federalSpendStats.totalFunding)} over ${federalSpendStats.yearsSpan} years.`
+          )}
+        </p>
+        <div className="text-xs text-gray-500">
+          Note: This analysis includes {stateEvents.length} disaster events recorded in the database for {stateName}.
+        </div>
+      </div>
       
       {/* Footer */}
       <div className="mt-8 text-sm text-gray-500">

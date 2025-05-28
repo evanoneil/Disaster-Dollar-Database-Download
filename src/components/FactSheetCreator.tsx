@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import * as Papa from 'papaparse';
-import { Search, Filter, Check, CheckSquare, Square } from 'lucide-react';
+import { Search, Filter, Check, CheckSquare, Square, Circle, CheckCircle } from 'lucide-react';
 import FactSheetDisplay from './FactSheetDisplay';
 
 interface DisasterData {
@@ -29,7 +29,7 @@ const FactSheetCreator = () => {
   const [selectedEvent, setSelectedEvent] = useState<DisasterData | null>(null);
   const [searchResults, setSearchResults] = useState<DisasterData[]>([]);
   const [showResults, setShowResults] = useState(false);
-  const [selectedResults, setSelectedResults] = useState<DisasterData[]>([]);
+  const [selectedResult, setSelectedResult] = useState<DisasterData | null>(null);
 
   // State and territory mappings
   const stateNames = {
@@ -139,7 +139,7 @@ const FactSheetCreator = () => {
     if (e.target.value.trim() === '') {
       setSearchResults([]);
       setShowResults(false);
-      setSelectedResults([]);
+      setSelectedResult(null);
     }
   };
 
@@ -150,7 +150,7 @@ const FactSheetCreator = () => {
     if (searchQuery.trim() === '') {
       setSearchResults([]);
       setShowResults(false);
-      setSelectedResults([]);
+      setSelectedResult(null);
       return;
     }
     
@@ -174,46 +174,14 @@ const FactSheetCreator = () => {
     });
     
     setSearchResults(sortedResults);
-    setSelectedResults([]);
+    setSelectedResult(null);
     setShowResults(true);
-  };
-
-  // Toggle selection of an event
-  const toggleEventSelection = (event: DisasterData) => {
-    setSelectedResults(prevSelected => {
-      const isAlreadySelected = prevSelected.some(item => 
-        item.incident_number === event.incident_number
-      );
-      
-      if (isAlreadySelected) {
-        return prevSelected.filter(item => item.incident_number !== event.incident_number);
-      } else {
-        return [...prevSelected, event];
-      }
-    });
-  };
-
-  // Check if an event is selected
-  const isEventSelected = (event: DisasterData) => {
-    return selectedResults.some(item => item.incident_number === event.incident_number);
-  };
-
-  // Select or deselect all events
-  const toggleSelectAll = () => {
-    if (selectedResults.length === searchResults.length) {
-      // If all are selected, deselect all
-      setSelectedResults([]);
-    } else {
-      // Otherwise, select all
-      setSelectedResults([...searchResults]);
-    }
   };
 
   // Display fact sheet for selected event
   const displaySelectedEvents = () => {
-    if (selectedResults.length > 0) {
-      // Use the first event as the primary event but pass all selected events
-      setSelectedEvent(selectedResults[0]);
+    if (selectedResult) {
+      setSelectedEvent(selectedResult);
       setShowResults(false);
     }
   };
@@ -261,33 +229,20 @@ const FactSheetCreator = () => {
           </button>
         </form>
         
-        {/* Search results with checkboxes */}
+        {/* Search results with radio buttons */}
         {showResults && searchResults.length > 0 && (
           <div className="mt-2 border rounded-lg shadow-md">
             <div className="p-2 bg-gray-100 border-b flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={toggleSelectAll}
-                  className="flex items-center gap-1 text-[#003A63] text-sm hover:text-[#00A79D]"
-                >
-                  {selectedResults.length === searchResults.length ? (
-                    <CheckSquare size={16} className="inline" />
-                  ) : (
-                    <Square size={16} className="inline" />
-                  )}
-                  <span className="font-medium">{selectedResults.length === searchResults.length ? 'Deselect All' : 'Select All'}</span>
-                </button>
                 <span className="text-sm">({searchResults.length} results found)</span>
               </div>
               <div className="flex gap-2">
-                {selectedResults.length > 0 && (
-                  <button
-                    onClick={displaySelectedEvents}
-                    className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
-                  >
-                    Show Selected ({selectedResults.length})
-                  </button>
-                )}
+                <button
+                  onClick={displaySelectedEvents}
+                  className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
+                >
+                  Show Selected
+                </button>
                 <button
                   onClick={() => setShowResults(false)}
                   className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
@@ -303,14 +258,14 @@ const FactSheetCreator = () => {
                   <div 
                     key={`${event.incident_number}-${index}`} 
                     className="p-3 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => toggleEventSelection(event)}
+                    onClick={() => setSelectedResult(event)}
                   >
                     <div className="flex items-start gap-2">
                       <div className="mt-0.5 text-[#003A63]">
-                        {isEventSelected(event) ? (
-                          <CheckSquare size={16} />
+                        {selectedResult && selectedResult.incident_number === event.incident_number ? (
+                          <CheckCircle size={16} />
                         ) : (
-                          <Square size={16} />
+                          <Circle size={16} />
                         )}
                       </div>
                       <div className="flex-1">
@@ -343,7 +298,7 @@ const FactSheetCreator = () => {
         <FactSheetDisplay 
           event={selectedEvent} 
           allEvents={data}
-          selectedEvents={selectedResults}
+          selectedEvents={[selectedEvent]}
           stateNames={stateNames}
         />
       )}
