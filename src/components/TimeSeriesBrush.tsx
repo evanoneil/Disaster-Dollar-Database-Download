@@ -37,6 +37,40 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
   // State to track if data is ready to render
   const [isDataReady, setIsDataReady] = useState(false);
 
+  // State for manual date inputs
+  const [manualStartYear, setManualStartYear] = useState(dateRange.startYear.toString());
+  const [manualStartMonth, setManualStartMonth] = useState(dateRange.startMonth.toString());
+  const [manualEndYear, setManualEndYear] = useState(dateRange.endYear.toString());
+  const [manualEndMonth, setManualEndMonth] = useState(dateRange.endMonth.toString());
+
+  // Month names for dropdown
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  // Calculate data range for explanatory text
+  const dataRangeInfo = useMemo(() => {
+    if (!data || data.length === 0) return null;
+    
+    const datesWithData = data
+      .filter(item => item.incident_start)
+      .map(item => new Date(item.incident_start))
+      .sort((a, b) => a.getTime() - b.getTime());
+    
+    if (datesWithData.length === 0) return null;
+    
+    const earliestDate = datesWithData[0];
+    const latestDate = datesWithData[datesWithData.length - 1];
+    
+    return {
+      earliest: earliestDate,
+      latest: latestDate,
+      totalRecords: data.length,
+      recordsWithDates: datesWithData.length
+    };
+  }, [data]);
+
   // Aggregate data by month
   const timeSeriesData = useMemo(() => {
     if (!data || data.length === 0) return [];
@@ -78,6 +112,47 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
   useEffect(() => {
     setIsDataReady(timeSeriesData.length > 0);
   }, [timeSeriesData]);
+
+  // Update manual inputs when dateRange prop changes
+  useEffect(() => {
+    setManualStartYear(dateRange.startYear.toString());
+    setManualStartMonth(dateRange.startMonth.toString());
+    setManualEndYear(dateRange.endYear.toString());
+    setManualEndMonth(dateRange.endMonth.toString());
+  }, [dateRange]);
+
+  // Handle manual date input changes
+  const handleManualDateChange = () => {
+    const startYear = parseInt(manualStartYear) || dateRange.startYear;
+    const startMonth = parseInt(manualStartMonth) || dateRange.startMonth;
+    const endYear = parseInt(manualEndYear) || dateRange.endYear;
+    const endMonth = parseInt(manualEndMonth) || dateRange.endMonth;
+    
+    // Validate date range
+    const startDate = new Date(startYear, startMonth - 1);
+    const endDate = new Date(endYear, endMonth - 1);
+    
+    if (startDate <= endDate) {
+      onDateRangeChange({
+        startYear,
+        startMonth,
+        endYear,
+        endMonth
+      });
+    }
+  };
+
+  // Generate year options based on available data
+  const yearOptions = useMemo(() => {
+    if (!dataRangeInfo) return [];
+    const startYear = dataRangeInfo.earliest.getFullYear();
+    const endYear = dataRangeInfo.latest.getFullYear();
+    const years = [];
+    for (let year = startYear; year <= endYear; year++) {
+      years.push(year);
+    }
+    return years;
+  }, [dataRangeInfo]);
 
   // Convert the current date range to dates for the brush
   const startDate = useMemo(() => {
@@ -187,12 +262,12 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
   // If data is not ready, show a loading state
   if (!isDataReady || timeSeriesData.length === 0) {
     return (
-      <div className="w-full h-56 mt-4 mb-8">
-        <div className="flex justify-between items-center mb-2">
+      <div className="w-full mt-4 mb-8">
+        <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-[#003A63]">Select Time Frame</h2>
           <div className="text-sm font-medium text-gray-600">Loading data...</div>
         </div>
-        <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded">
+        <div className="w-full h-56 flex items-center justify-center bg-gray-50 rounded">
           <p className="text-gray-500">Loading timeline data...</p>
         </div>
       </div>
@@ -200,86 +275,186 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
   }
 
   return (
-    <div className="w-full h-56 mt-4 mb-8">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-lg font-semibold text-[#003A63]">Select Time Frame</h2>
-        <div className="text-sm font-medium text-gray-600">
-          Selected: {selectedRange}
+    <div className="w-full mt-4 mb-8">
+      {/* Header and Data Info */}
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-lg font-semibold text-[#003A63]">Select Time Frame</h2>
+          <div className="text-sm font-medium text-gray-600">
+            Selected: {selectedRange}
+          </div>
+        </div>
+        
+        {/* Data Availability Information */}
+        {dataRangeInfo && (
+          <div className="mb-4">
+            <p className="text-sm text-gray-600">
+              Disaster data is available from{' '}
+              <span className="font-medium">
+                {format(dataRangeInfo.earliest, 'MMMM yyyy')}
+              </span>{' '}
+              to{' '}
+              <span className="font-medium">
+                {format(dataRangeInfo.latest, 'MMMM yyyy')}
+              </span>.{' '}
+              The database contains{' '}
+              <span className="font-medium">{dataRangeInfo.totalRecords.toLocaleString()}</span>{' '}
+              disaster records.
+            </p>
+          </div>
+        )}
+        
+        {/* Manual Date Entry */}
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Manual Date Selection</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            {/* Start Date */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+              <div className="flex gap-2">
+                <select
+                  value={manualStartMonth}
+                  onChange={(e) => setManualStartMonth(e.target.value)}
+                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                >
+                  {months.map((month, index) => (
+                    <option key={index + 1} value={index + 1}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={manualStartYear}
+                  onChange={(e) => setManualStartYear(e.target.value)}
+                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                >
+                  {yearOptions.map(year => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* End Date */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+              <div className="flex gap-2">
+                <select
+                  value={manualEndMonth}
+                  onChange={(e) => setManualEndMonth(e.target.value)}
+                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                >
+                  {months.map((month, index) => (
+                    <option key={index + 1} value={index + 1}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={manualEndYear}
+                  onChange={(e) => setManualEndYear(e.target.value)}
+                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                >
+                  {yearOptions.map(year => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* Apply Button */}
+            <div>
+              <button
+                onClick={handleManualDateChange}
+                className="w-full px-3 py-1 bg-[#00A79D] text-white text-sm rounded hover:bg-[#003A63] transition-colors"
+              >
+                Apply Date Range
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={timeSeriesData}
-          margin={{ top: 40, right: 30, left: 0, bottom: 0 }}
-          barCategoryGap={1} // Set to 1 for histogram-like appearance
-          barGap={0}
-        >
-          <defs>
-            <linearGradient id="colorFunding" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#41B6E6" stopOpacity={0.8}/>
-              <stop offset="95%" stopColor="#41B6E6" stopOpacity={0.2}/>
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis 
-            dataKey="date" 
-            tickFormatter={formatXAxis}
-            type="category"
-            allowDuplicatedCategory={false}
-            height={30}
-            fontSize={11} // Smaller font for axis labels
-          />
-          <YAxis 
-            tickFormatter={(value) => value === 0 ? '$0M' : `$${(value / 1000000).toFixed(0)}M`}
-            height={50}
-            width={70} // Wider for the dollar signs
-            fontSize={11} // Smaller font size
-          />
-          <Tooltip 
-            formatter={formatTooltip}
-            labelFormatter={(label) => {
-              try {
-                return format(parseISO(label as string), 'MMMM yyyy');
-              } catch (e) {
-                return "Unknown date";
-              }
-            }}
-          />
-          {/* Only render text if we have valid data */}
-          {selectedRange !== "No data" && (
-            <text
-              x={String(50) + "%"}
-              y="20"
-              textAnchor="middle"
-              dominantBaseline="middle"
-              className="text-sm font-medium"
-              fill="#003A63"
-            >
-              {selectedRange}
-            </text>
-          )}
-          <Bar 
-            dataKey="totalFunding" 
-            fill="url(#colorFunding)"
-            stroke="#41B6E6"
-            isAnimationActive={false}
-          />
-          <Brush 
-            dataKey="date"
-            height={30}
-            stroke="#003A63"
-            y={0}
-            startIndex={startIndex}
-            endIndex={endIndex}
-            onChange={handleBrushChange}
-            tickFormatter={formatXAxis}
-            fill="#f5f5f5"
-            fillOpacity={0.5}
-            travellerWidth={10}
-            alwaysShowText={true}
-          />
-        </BarChart>
-      </ResponsiveContainer>
+
+      {/* Timeline Chart */}
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={timeSeriesData}
+            margin={{ top: 40, right: 30, left: 0, bottom: 0 }}
+            barCategoryGap={1} // Set to 1 for histogram-like appearance
+            barGap={0}
+          >
+            <defs>
+              <linearGradient id="colorFunding" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#41B6E6" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#41B6E6" stopOpacity={0.2}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis 
+              dataKey="date" 
+              tickFormatter={formatXAxis}
+              type="category"
+              allowDuplicatedCategory={false}
+              height={30}
+              fontSize={11} // Smaller font for axis labels
+            />
+            <YAxis 
+              tickFormatter={(value) => value === 0 ? '$0M' : `$${(value / 1000000).toFixed(0)}M`}
+              height={50}
+              width={70} // Wider for the dollar signs
+              fontSize={11} // Smaller font size
+            />
+            <Tooltip 
+              formatter={formatTooltip}
+              labelFormatter={(label) => {
+                try {
+                  return format(parseISO(label as string), 'MMMM yyyy');
+                } catch (e) {
+                  return "Unknown date";
+                }
+              }}
+            />
+            {/* Only render text if we have valid data */}
+            {selectedRange !== "No data" && (
+              <text
+                x={String(50) + "%"}
+                y="20"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                className="text-sm font-medium"
+                fill="#003A63"
+              >
+                {selectedRange}
+              </text>
+            )}
+            <Bar 
+              dataKey="totalFunding" 
+              fill="url(#colorFunding)"
+              stroke="#41B6E6"
+              isAnimationActive={false}
+            />
+            <Brush 
+              dataKey="date"
+              height={30}
+              stroke="#003A63"
+              y={0}
+              startIndex={startIndex}
+              endIndex={endIndex}
+              onChange={handleBrushChange}
+              tickFormatter={formatXAxis}
+              fill="#f5f5f5"
+              fillOpacity={0.5}
+              travellerWidth={10}
+              alwaysShowText={true}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 };

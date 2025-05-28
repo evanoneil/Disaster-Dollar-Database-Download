@@ -34,7 +34,9 @@ const DisasterDataDownloader = () => {
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
   const [selectedFundingTypes, setSelectedFundingTypes] = useState<string[]>(['ihp', 'pa', 'cdbg_dr_allocation']);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortColumn, setSortColumn] = useState<string>('incident_start');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -172,10 +174,59 @@ const DisasterDataDownloader = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  // Sorting function
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1); // Reset to first page when sorting changes
+  };
+
+  // Sort the filtered data
+  const sortedData = useMemo(() => {
+    const sorted = [...filteredData].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortColumn) {
+        case 'incident_start':
+          aValue = new Date(a.incident_start);
+          bValue = new Date(b.incident_start);
+          break;
+        case 'state':
+          aValue = stateNames[a.state as keyof typeof stateNames] || a.state;
+          bValue = stateNames[b.state as keyof typeof stateNames] || b.state;
+          break;
+        case 'incident_type':
+          aValue = a.incident_type;
+          bValue = b.incident_type;
+          break;
+        case 'event':
+          aValue = a.event;
+          bValue = b.event;
+          break;
+        case 'incident_number':
+          aValue = a.incident_number;
+          bValue = b.incident_number;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    return sorted;
+  }, [filteredData, sortColumn, sortDirection, stateNames]);
+
+  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentData = filteredData.slice(startIndex, endIndex);
+  const currentData = sortedData.slice(startIndex, endIndex);
 
   if (loading) {
     return <div className="text-center p-4">Loading data...</div>;
@@ -247,7 +298,7 @@ const DisasterDataDownloader = () => {
                     
                     {/* Grand Total Box */}
                     <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
-                      <h3 className="text-xl font-bold text-[#003A63] mb-2">Grand Total</h3>
+                      <h3 className="text-xl font-bold text-[#00A79D] mb-2">Grand Total</h3>
                       <p className="text-3xl font-bold text-[#00A79D]">{formatCurrency(grandTotal)}</p>
                       <p className="text-sm text-gray-500 mt-1">All selected funding types</p>
                     </div>
@@ -300,6 +351,70 @@ const DisasterDataDownloader = () => {
         {/* Map Section */}
         <div>
           <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Disaster Map</h2>
+          
+          {/* Map Description */}
+          <p className="text-sm text-gray-600 mb-4">
+            Explore the geographic distribution of disaster events and funding. Each point represents a disaster event, with size and color indicating funding amounts across the selected funding types.
+          </p>
+          
+          {/* Current Filters Readout */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Current Filters Applied</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {/* Date Range */}
+              <div>
+                <span className="font-medium text-gray-600">Date Range:</span>
+                <p className="text-gray-800">
+                  {months[dateRange.startMonth - 1]} {dateRange.startYear} - {months[dateRange.endMonth - 1]} {dateRange.endYear}
+                </p>
+              </div>
+              
+              {/* Locations */}
+              <div>
+                <span className="font-medium text-gray-600">Locations:</span>
+                <p className="text-gray-800">
+                  {selectedStates.length === 0 && !includesTerritories ? 'All states' : 
+                   selectedStates.length === Object.keys(stateNames).length && includesTerritories ? 'All states & territories' :
+                   selectedStates.length === 0 && includesTerritories ? 'U.S. Territories only' :
+                   selectedStates.length <= 3 ? 
+                     selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') + 
+                     (includesTerritories ? ' + Territories' : '') :
+                     `${selectedStates.length} states selected` + (includesTerritories ? ' + Territories' : '')
+                  }
+                </p>
+              </div>
+              
+              {/* Disaster Types */}
+              <div>
+                <span className="font-medium text-gray-600">Disaster Types:</span>
+                <p className="text-gray-800">
+                  {selectedDisasterTypes.length === 0 ? 'All types' :
+                   selectedDisasterTypes.length <= 2 ? selectedDisasterTypes.join(', ') :
+                   `${selectedDisasterTypes.length} types selected`
+                  }
+                </p>
+              </div>
+              
+              {/* Funding Types */}
+              <div>
+                <span className="font-medium text-gray-600">Funding Types:</span>
+                <p className="text-gray-800">
+                  {selectedFundingTypes.length === 0 ? 'None selected' :
+                   selectedFundingTypes.length === 3 ? 'All funding types' :
+                   selectedFundingTypes.map(type => {
+                     switch(type) {
+                       case 'ihp': return 'IHP';
+                       case 'pa': return 'PA';
+                       case 'cdbg_dr_allocation': return 'CDBG-DR';
+                       default: return type;
+                     }
+                   }).join(', ')
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+          
           <DisasterMap 
             filteredData={filteredData} 
             stateNames={stateNames} 
@@ -336,8 +451,12 @@ const DisasterDataDownloader = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
+              <div className="flex-1 overflow-y-scroll p-4 relative scrollbar-custom">
+                {/* Scroll indicator for more content */}
+                <div className="absolute top-2 right-2 text-xs text-gray-400 pointer-events-none">
+                  Scroll for more ↓
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-3 pt-4">
                   {Object.entries(stateNames).map(([abbr, name]) => (
                     <label key={abbr} className="flex items-center space-x-2">
                       <input
@@ -369,6 +488,8 @@ const DisasterDataDownloader = () => {
                     <span className="text-sm font-medium">U.S. Territories</span>
                   </label>
                 </div>
+                {/* Bottom fade gradient to indicate more content */}
+                <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
               </div>
             </div>
           </div>
@@ -396,8 +517,12 @@ const DisasterDataDownloader = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="grid grid-cols-1 md:grid-cols-1 gap-3">
+              <div className="flex-1 overflow-y-scroll p-4 relative scrollbar-custom">
+                {/* Scroll indicator for more content */}
+                <div className="absolute top-2 right-2 text-xs text-gray-400 pointer-events-none">
+                  Scroll for more ↓
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-3 pt-4">
                   {_.uniq(data.map(row => row.incident_type)).filter(Boolean).sort().map(type => (
                     <label key={type} className="flex items-center space-x-2">
                       <input
@@ -416,6 +541,8 @@ const DisasterDataDownloader = () => {
                     </label>
                   ))}
                 </div>
+                {/* Bottom fade gradient to indicate more content */}
+                <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
               </div>
             </div>
           </div>
@@ -456,7 +583,7 @@ const DisasterDataDownloader = () => {
                       className="rounded border-gray-300"
                     />
                     <div>
-                      <span className="text-sm font-medium">Individual & Household Program</span>
+                      <span className="text-sm font-medium">FEMA Individual & Household Program</span>
                       <p className="text-xs text-gray-500 mt-1">FEMA assistance for individuals and families</p>
                     </div>
                   </label>
@@ -474,7 +601,7 @@ const DisasterDataDownloader = () => {
                       className="rounded border-gray-300"
                     />
                     <div>
-                      <span className="text-sm font-medium">Public Assistance</span>
+                      <span className="text-sm font-medium">FEMA Public Assistance</span>
                       <p className="text-xs text-gray-500 mt-1">Funding to repair infrastructure and public facilities</p>
                     </div>
                   </label>
@@ -492,7 +619,7 @@ const DisasterDataDownloader = () => {
                       className="rounded border-gray-300"
                     />
                     <div>
-                      <span className="text-sm font-medium">CDBG-DR</span>
+                      <span className="text-sm font-medium">HUD CDBG-DR</span>
                       <p className="text-xs text-gray-500 mt-1">Community Development Block Grant Disaster Recovery</p>
                     </div>
                   </label>
@@ -505,7 +632,7 @@ const DisasterDataDownloader = () => {
         {/* Download Section */}
         <div className="flex items-center justify-between pt-4 border-t">
           <span className="text-sm text-[#89684F]">
-            {filteredData.length} records match your criteria
+            {sortedData.length} records match your criteria
           </span>
           <button
             onClick={handleDownload}
@@ -518,15 +645,93 @@ const DisasterDataDownloader = () => {
         
         {/* Records Table */}
         <div className="mt-8 overflow-x-auto">
-          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Preview Records</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-[#003A63]">Preview Records</h2>
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-[#89684F]">Records per page:</label>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#00A79D]"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
           <table className="min-w-full border-collapse border border-[#E6E7E8] text-sm">
             <thead>
               <tr className="bg-[#003A63] text-white">
-                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">Incident Date</th>
-                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">State</th>
-                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">Disaster Type</th>
-                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">Event</th>
-                <th className="px-3 py-2 border border-[#E6E7E8] text-sm">Incident Number</th>
+                <th 
+                  className="px-3 py-2 border border-[#E6E7E8] text-sm cursor-pointer hover:bg-[#004c7a] select-none"
+                  onClick={() => handleSort('incident_start')}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>Incident Date</span>
+                    <span className="ml-1">
+                      {sortColumn === 'incident_start' ? (
+                        sortDirection === 'asc' ? '↑' : '↓'
+                      ) : '↕'}
+                    </span>
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 border border-[#E6E7E8] text-sm cursor-pointer hover:bg-[#004c7a] select-none"
+                  onClick={() => handleSort('state')}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>State</span>
+                    <span className="ml-1">
+                      {sortColumn === 'state' ? (
+                        sortDirection === 'asc' ? '↑' : '↓'
+                      ) : '↕'}
+                    </span>
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 border border-[#E6E7E8] text-sm cursor-pointer hover:bg-[#004c7a] select-none"
+                  onClick={() => handleSort('incident_type')}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>Disaster Type</span>
+                    <span className="ml-1">
+                      {sortColumn === 'incident_type' ? (
+                        sortDirection === 'asc' ? '↑' : '↓'
+                      ) : '↕'}
+                    </span>
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 border border-[#E6E7E8] text-sm cursor-pointer hover:bg-[#004c7a] select-none"
+                  onClick={() => handleSort('event')}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>Event</span>
+                    <span className="ml-1">
+                      {sortColumn === 'event' ? (
+                        sortDirection === 'asc' ? '↑' : '↓'
+                      ) : '↕'}
+                    </span>
+                  </div>
+                </th>
+                <th 
+                  className="px-3 py-2 border border-[#E6E7E8] text-sm cursor-pointer hover:bg-[#004c7a] select-none"
+                  onClick={() => handleSort('incident_number')}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>Incident Number</span>
+                    <span className="ml-1">
+                      {sortColumn === 'incident_number' ? (
+                        sortDirection === 'asc' ? '↑' : '↓'
+                      ) : '↕'}
+                    </span>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -549,7 +754,7 @@ const DisasterDataDownloader = () => {
           {/* Pagination Controls */}
           <div className="mt-4 flex items-center justify-between">
             <p className="text-sm text-[#89684F]">
-              Showing {startIndex + 1}-{Math.min(endIndex, filteredData.length)} of {filteredData.length} records
+              Showing {startIndex + 1}-{Math.min(endIndex, sortedData.length)} of {sortedData.length} records
             </p>
             <div className="flex gap-2">
               <button

@@ -511,6 +511,10 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
     const cutoffDate = new Date();
     cutoffDate.setFullYear(cutoffDate.getFullYear() - yearsToConsider);
     
+    // Save the cutoff year and current year for the chart title
+    const cutoffYear = cutoffDate.getFullYear();
+    const currentYear = new Date().getFullYear();
+    
     // Filter to events within our chosen timeframe
     let recentEvents = eventsWithFunding.filter(item => {
       if (!item.incident_start) {
@@ -581,12 +585,16 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
         ihpTotal: item.calculatedFunding.ihpTotal,
         paTotal: item.calculatedFunding.paTotal,
         cdbgDrTotal: item.calculatedFunding.cdbgDrAllocation,
-        totalFunding: item.calculatedFunding.totalFunding
+        totalFunding: item.calculatedFunding.totalFunding,
+        date: item.incident_start // Include the date for reference
       };
     });
     
     console.log(`Displaying ${majorEventsForChart.length} events in the chart for ${stateName}`);
-    return majorEventsForChart;
+    return {
+      data: majorEventsForChart,
+      dateRange: `${cutoffYear}-${currentYear}` // Return the date range for the chart title
+    };
   }, [stateEvents, stateName, event.state]);
 
   // Format currency
@@ -1012,9 +1020,47 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
           Funding for Major Storms by Source
         </h2>
         <DisasterFundingChart 
-          data={majorStormsData}
+          data={majorStormsData.data}
+          dateRange={majorStormsData.dateRange}
           title=""
         />
+        
+        {/* Total Funding by Source */}
+        {majorStormsData.data.length > 0 && (
+          <div className="mt-4 border-t pt-4">
+            <h3 className="text-lg font-semibold text-[#003A63] mb-2">Total Funding by Source</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              {(() => {
+                // Calculate total funding by source
+                const totalIHP = majorStormsData.data.reduce((sum, event) => sum + (event.ihpTotal || 0), 0);
+                const totalPA = majorStormsData.data.reduce((sum, event) => sum + (event.paTotal || 0), 0);
+                const totalCDBG = majorStormsData.data.reduce((sum, event) => sum + (event.cdbgDrTotal || 0), 0);
+                const grandTotal = totalIHP + totalPA + totalCDBG;
+                
+                return (
+                  <>
+                    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-semibold text-[#003A63]">Grand Total</h4>
+                      <p className="text-xl font-bold text-[#00A79D]">{formatCurrency(grandTotal)}</p>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-semibold text-[#003A63]">Individual & Household Program</h4>
+                      <p className="text-xl font-bold text-[#2171b5]">{formatCurrency(totalIHP)}</p>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-semibold text-[#003A63]">Public Assistance</h4>
+                      <p className="text-xl font-bold text-[#41B6E6]">{formatCurrency(totalPA)}</p>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-semibold text-[#003A63]">Community Development Block Grant</h4>
+                      <p className="text-xl font-bold text-[#89684F]">{formatCurrency(totalCDBG)}</p>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Congressional District Funding Section - Only show if not already shown above */}

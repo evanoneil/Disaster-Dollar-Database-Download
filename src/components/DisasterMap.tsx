@@ -920,4 +920,4 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
   );
 };
 
-export default DisasterMap; 
+export default DisasterMap;
