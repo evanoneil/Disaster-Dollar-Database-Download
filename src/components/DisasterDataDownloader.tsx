@@ -242,187 +242,18 @@ const DisasterDataDownloader = () => {
       </div>
 
       <div className="space-y-6">
-        {/* Time Series Brush Selector */}
+        {/* Time Series Date Selection Only */}
         {!loading && (
           <TimeSeriesBrush 
             data={data} 
             dateRange={dateRange} 
-            onDateRangeChange={setDateRange} 
+            onDateRangeChange={setDateRange}
+            showDateSelection={true}
+            showChart={false}
           />
         )}
         
-        {/* Total Funding Summary */}
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Total Disaster Funding</h2>
-          <div className="bg-[#f8fafc] border border-[#E6E7E8] rounded-lg p-4">
-            {(() => {
-              // Calculate totals for all funding types
-              const totalIHP = filteredData.reduce((sum, item) => {
-                const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total : 
-                            (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
-                return sum + (selectedFundingTypes.includes('ihp') ? ihpTotal : 0);
-              }, 0);
-              
-              const totalPA = filteredData.reduce((sum, item) => {
-                const paTotal = typeof item.pa_total === 'number' ? item.pa_total : 
-                           (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
-                return sum + (selectedFundingTypes.includes('pa') ? paTotal : 0);
-              }, 0);
-              
-              const totalCDBG = filteredData.reduce((sum, item) => {
-                const cdbgTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
-                               (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
-                return sum + (selectedFundingTypes.includes('cdbg_dr_allocation') ? cdbgTotal : 0);
-              }, 0);
-              
-              const grandTotal = totalIHP + totalPA + totalCDBG;
-              
-              // Helper function to format currency
-              const formatCurrency = (amount: number): string => {
-                return new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                  maximumFractionDigits: 0
-                }).format(amount);
-              };
-
-              return (
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="md:flex-1 flex flex-col md:flex-row gap-3">
-                    {/* Number of Disaster Events Box */}
-                    <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
-                      <h3 className="text-xl font-bold text-[#003A63] mb-2">Disaster Events</h3>
-                      <p className="text-3xl font-bold text-[#003A63]">{formatNumber(filteredData.length)}</p>
-                      <p className="text-sm text-gray-500 mt-1">Total events matching filters</p>
-                    </div>
-                    
-                    {/* Grand Total Box */}
-                    <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
-                      <h3 className="text-xl font-bold text-[#00A79D] mb-2">Grand Total</h3>
-                      <p className="text-3xl font-bold text-[#00A79D]">{formatCurrency(grandTotal)}</p>
-                      <p className="text-sm text-gray-500 mt-1">All selected funding types</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-full">
-                      {selectedFundingTypes.includes('ihp') && (
-                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
-                          <div>
-                            <h4 className="text-sm font-semibold text-[#003A63]">Individual & Household<br />Program Total</h4>
-                            <p className="text-xl font-bold text-[#2171b5] mt-1">{formatCurrency(totalIHP)}</p>
-                          </div>
-                          <div></div> {/* Empty div for consistent spacing */}
-                        </div>
-                      )}
-                      
-                      {selectedFundingTypes.includes('pa') && (
-                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
-                          <div>
-                            <h4 className="text-sm font-semibold text-[#003A63]">Public<br />Assistance Total</h4>
-                            <p className="text-xl font-bold text-[#41B6E6] mt-1">{formatCurrency(totalPA)}</p>
-                          </div>
-                          <div></div> {/* Empty div for consistent spacing */}
-                        </div>
-                      )}
-                      
-                      {selectedFundingTypes.includes('cdbg_dr_allocation') && (
-                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
-                          <div>
-                            <h4 className="text-sm font-semibold text-[#003A63]">CDBG-DR<br />Allocation Total</h4>
-                            <p className="text-xl font-bold text-[#89684F] mt-1">{formatCurrency(totalCDBG)}</p>
-                          </div>
-                          <div></div> {/* Empty div for consistent spacing */}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-              
-              // Helper function to format large numbers with commas
-              function formatNumber(num: number): string {
-                return new Intl.NumberFormat('en-US').format(num);
-              }
-            })()}
-          </div>
-        </div>
-
-        {/* Map Section */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Disaster Map</h2>
-          
-          {/* Map Description */}
-          <p className="text-sm text-gray-600 mb-4">
-            Explore the geographic distribution of disaster events and funding. Each point represents a disaster event, with size and color indicating funding amounts across the selected funding types.
-          </p>
-          
-          {/* Current Filters Readout */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Current Filters Applied</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-              {/* Date Range */}
-              <div>
-                <span className="font-medium text-gray-600">Date Range:</span>
-                <p className="text-gray-800">
-                  {months[dateRange.startMonth - 1]} {dateRange.startYear} - {months[dateRange.endMonth - 1]} {dateRange.endYear}
-                </p>
-              </div>
-              
-              {/* Locations */}
-              <div>
-                <span className="font-medium text-gray-600">Locations:</span>
-                <p className="text-gray-800">
-                  {selectedStates.length === 0 && !includesTerritories ? 'All states' : 
-                   selectedStates.length === Object.keys(stateNames).length && includesTerritories ? 'All states & territories' :
-                   selectedStates.length === 0 && includesTerritories ? 'U.S. Territories only' :
-                   selectedStates.length <= 3 ? 
-                     selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') + 
-                     (includesTerritories ? ' + Territories' : '') :
-                     `${selectedStates.length} states selected` + (includesTerritories ? ' + Territories' : '')
-                  }
-                </p>
-              </div>
-              
-              {/* Disaster Types */}
-              <div>
-                <span className="font-medium text-gray-600">Disaster Types:</span>
-                <p className="text-gray-800">
-                  {selectedDisasterTypes.length === 0 ? 'All types' :
-                   selectedDisasterTypes.length <= 2 ? selectedDisasterTypes.join(', ') :
-                   `${selectedDisasterTypes.length} types selected`
-                  }
-                </p>
-              </div>
-              
-              {/* Funding Types */}
-              <div>
-                <span className="font-medium text-gray-600">Funding Types:</span>
-                <p className="text-gray-800">
-                  {selectedFundingTypes.length === 0 ? 'None selected' :
-                   selectedFundingTypes.length === 3 ? 'All funding types' :
-                   selectedFundingTypes.map(type => {
-                     switch(type) {
-                       case 'ihp': return 'IHP';
-                       case 'pa': return 'PA';
-                       case 'cdbg_dr_allocation': return 'CDBG-DR';
-                       default: return type;
-                     }
-                   }).join(', ')
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <DisasterMap 
-            filteredData={filteredData} 
-            stateNames={stateNames} 
-            selectedFundingTypes={selectedFundingTypes}
-          />
-        </div>
-
-        {/* Filter Sections - Flex layout for desktop */}
+        {/* Filter Sections - Moved right below TimeSeriesBrush */}
         <div className="flex flex-col md:flex-row md:space-x-4">
           {/* Location Selection */}
           <div className="md:w-1/3 mb-6 md:mb-0">
@@ -627,6 +458,223 @@ const DisasterDataDownloader = () => {
               </div>
             </div>
           </div>
+        </div>
+        
+        {/* Timeline Chart - Moved below other filters */}
+        {!loading && (
+          <TimeSeriesBrush 
+            data={filteredData}
+            dateRange={dateRange} 
+            onDateRangeChange={setDateRange}
+            showDateSelection={false}
+            showChart={true}
+            title="Disaster Funding Overview"
+            filterSummary={[
+              {
+                label: "Date Range",
+                value: `${months[dateRange.startMonth - 1]} ${dateRange.startYear} - ${months[dateRange.endMonth - 1]} ${dateRange.endYear}`
+              },
+              {
+                label: "Locations",
+                value: selectedStates.length === 0 && !includesTerritories ? 'All states' : 
+                  selectedStates.length === Object.keys(stateNames).length && includesTerritories ? 'All states & territories' :
+                  selectedStates.length === 0 && includesTerritories ? 'U.S. Territories only' :
+                  selectedStates.length <= 3 ? 
+                    selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') + 
+                    (includesTerritories ? ' + Territories' : '') :
+                    `${selectedStates.length} states selected` + (includesTerritories ? ' + Territories' : '')
+              },
+              {
+                label: "Disaster Types",
+                value: selectedDisasterTypes.length === 0 ? 'All types' :
+                  selectedDisasterTypes.length <= 2 ? selectedDisasterTypes.join(', ') :
+                  `${selectedDisasterTypes.length} types selected`
+              },
+              {
+                label: "Funding Types",
+                value: selectedFundingTypes.length === 0 ? 'None selected' :
+                  selectedFundingTypes.length === 3 ? 'All funding types' :
+                  selectedFundingTypes.map(type => {
+                    switch(type) {
+                      case 'ihp': return 'IHP';
+                      case 'pa': return 'PA';
+                      case 'cdbg_dr_allocation': return 'CDBG-DR';
+                      default: return type;
+                    }
+                  }).join(', ')
+              }
+            ]}
+          />
+        )}
+        
+        {/* Total Funding Summary */}
+        <div className="mb-6">
+          <div className="bg-[#f8fafc] border border-[#E6E7E8] rounded-lg p-4">
+            {(() => {
+              // Calculate totals for all funding types
+              const totalIHP = filteredData.reduce((sum, item) => {
+                const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total : 
+                            (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
+                return sum + (selectedFundingTypes.includes('ihp') ? ihpTotal : 0);
+              }, 0);
+              
+              const totalPA = filteredData.reduce((sum, item) => {
+                const paTotal = typeof item.pa_total === 'number' ? item.pa_total : 
+                           (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
+                return sum + (selectedFundingTypes.includes('pa') ? paTotal : 0);
+              }, 0);
+              
+              const totalCDBG = filteredData.reduce((sum, item) => {
+                const cdbgTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+                               (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
+                return sum + (selectedFundingTypes.includes('cdbg_dr_allocation') ? cdbgTotal : 0);
+              }, 0);
+              
+              const grandTotal = totalIHP + totalPA + totalCDBG;
+              
+              // Helper function to format currency
+              const formatCurrency = (amount: number): string => {
+                return new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                  maximumFractionDigits: 0
+                }).format(amount);
+              };
+
+              return (
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="md:flex-1 flex flex-col md:flex-row gap-3">
+                    {/* Number of Disaster Events Box */}
+                    <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
+                      <h3 className="text-xl font-bold text-[#003A63] mb-2">Disaster Events</h3>
+                      <p className="text-3xl font-bold text-[#003A63]">{formatNumber(filteredData.length)}</p>
+                      <p className="text-sm text-gray-500 mt-1">Total events matching filters</p>
+                    </div>
+                    
+                    {/* Grand Total Box */}
+                    <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
+                      <h3 className="text-xl font-bold text-[#00A79D] mb-2">Grand Total</h3>
+                      <p className="text-3xl font-bold text-[#00A79D]">{formatCurrency(grandTotal)}</p>
+                      <p className="text-sm text-gray-500 mt-1">All selected funding types</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-full">
+                      {selectedFundingTypes.includes('ihp') && (
+                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
+                          <div>
+                            <h4 className="text-sm font-semibold text-[#003A63]">Individual & Household<br />Program Total</h4>
+                            <p className="text-xl font-bold text-[#2171b5] mt-1">{formatCurrency(totalIHP)}</p>
+                          </div>
+                          <div></div> {/* Empty div for consistent spacing */}
+                        </div>
+                      )}
+                      
+                      {selectedFundingTypes.includes('pa') && (
+                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
+                          <div>
+                            <h4 className="text-sm font-semibold text-[#003A63]">Public<br />Assistance Total</h4>
+                            <p className="text-xl font-bold text-[#41B6E6] mt-1">{formatCurrency(totalPA)}</p>
+                          </div>
+                          <div></div> {/* Empty div for consistent spacing */}
+                        </div>
+                      )}
+                      
+                      {selectedFundingTypes.includes('cdbg_dr_allocation') && (
+                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
+                          <div>
+                            <h4 className="text-sm font-semibold text-[#003A63]">CDBG-DR<br />Allocation Total</h4>
+                            <p className="text-xl font-bold text-[#89684F] mt-1">{formatCurrency(totalCDBG)}</p>
+                          </div>
+                          <div></div> {/* Empty div for consistent spacing */}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+              
+              // Helper function to format large numbers with commas
+              function formatNumber(num: number): string {
+                return new Intl.NumberFormat('en-US').format(num);
+              }
+            })()}
+          </div>
+        </div>
+
+        {/* Map Section */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Disaster Map</h2>
+          
+          {/* Map Description */}
+          <p className="text-sm text-gray-600 mb-4">
+            Explore the geographic distribution of disaster events and funding. Each point represents a disaster event, with size and color indicating funding amounts across the selected funding types.
+          </p>
+          
+          {/* Current Filters Readout */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Current Filters Applied</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {/* Date Range */}
+              <div>
+                <span className="font-medium text-gray-600">Date Range:</span>
+                <p className="text-gray-800">
+                  {months[dateRange.startMonth - 1]} {dateRange.startYear} - {months[dateRange.endMonth - 1]} {dateRange.endYear}
+                </p>
+              </div>
+              
+              {/* Locations */}
+              <div>
+                <span className="font-medium text-gray-600">Locations:</span>
+                <p className="text-gray-800">
+                  {selectedStates.length === 0 && !includesTerritories ? 'All states' : 
+                   selectedStates.length === Object.keys(stateNames).length && includesTerritories ? 'All states & territories' :
+                   selectedStates.length === 0 && includesTerritories ? 'U.S. Territories only' :
+                   selectedStates.length <= 3 ? 
+                     selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') + 
+                     (includesTerritories ? ' + Territories' : '') :
+                     `${selectedStates.length} states selected` + (includesTerritories ? ' + Territories' : '')
+                  }
+                </p>
+              </div>
+              
+              {/* Disaster Types */}
+              <div>
+                <span className="font-medium text-gray-600">Disaster Types:</span>
+                <p className="text-gray-800">
+                  {selectedDisasterTypes.length === 0 ? 'All types' :
+                   selectedDisasterTypes.length <= 2 ? selectedDisasterTypes.join(', ') :
+                   `${selectedDisasterTypes.length} types selected`
+                  }
+                </p>
+              </div>
+              
+              {/* Funding Types */}
+              <div>
+                <span className="font-medium text-gray-600">Funding Types:</span>
+                <p className="text-gray-800">
+                  {selectedFundingTypes.length === 0 ? 'None selected' :
+                   selectedFundingTypes.length === 3 ? 'All funding types' :
+                   selectedFundingTypes.map(type => {
+                     switch(type) {
+                       case 'ihp': return 'IHP';
+                       case 'pa': return 'PA';
+                       case 'cdbg_dr_allocation': return 'CDBG-DR';
+                       default: return type;
+                     }
+                   }).join(', ')
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <DisasterMap 
+            filteredData={filteredData} 
+            stateNames={stateNames} 
+            selectedFundingTypes={selectedFundingTypes}
+          />
         </div>
 
         {/* Download Section */}

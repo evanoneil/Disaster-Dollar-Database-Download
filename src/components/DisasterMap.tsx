@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import maplibregl, { GeoJSONSource, Expression } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { X } from 'lucide-react';
 
 interface DisasterData {
   state: string;
@@ -197,6 +198,16 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
     '#041e42'  // Extremely high
   ]);
   const [dynamicThresholds, setDynamicThresholds] = useState<number[]>([0, 100, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 5000000000]);
+  
+  // Add state for clicked state modal
+  const [selectedStateData, setSelectedStateData] = useState<{
+    stateAbbr: string;
+    stateName: string;
+    stateStats: any;
+    ihpTotal: number;
+    paTotal: number;
+    cdbgDrTotal: number;
+  } | null>(null);
   
   // Function to create a color expression with literal values
   const createColorExpression = useCallback((thresholds: number[] = [0, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000]) => {
@@ -535,14 +546,9 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
         }
       });
       
-      // Add hover effect
-      map.current.on('mousemove', 'states-layer', (e) => {
+      // Add click event to show modal instead of hover
+      map.current.on('click', 'states-layer', (e) => {
         if (!e.features || e.features.length === 0 || !map.current) return;
-        
-        // Remove existing popup if there is one
-        if (popup.current) {
-          popup.current.remove();
-        }
         
         const feature = e.features[0];
         // Use the state_abbr property we added earlier instead of looking up by ID
@@ -581,175 +587,15 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
             return sum + cdbgDr;
           }, 0);
         
-        // Create and store the popup
-        popup.current = new maplibregl.Popup({
-          closeButton: false,
-          closeOnClick: false,
-          className: 'disaster-map-tooltip', // Add a custom class for styling
-          maxWidth: '250px', // Reduced from 300px
-          offset: 15
-        })
-          .setLngLat(e.lngLat)
-          .setHTML(`
-            <div class="tooltip-container">
-              <div class="tooltip-header">
-                <h3>${stateName}</h3>
-              </div>
-              <div class="tooltip-content">
-                ${stateStats ? `
-                  <div class="tooltip-summary">
-                    <div class="tooltip-stat">
-                      <span class="tooltip-label">Events:</span>
-                      <span class="tooltip-value">${stateStats.count}</span>
-                    </div>
-                    <div class="tooltip-stat">
-                      <span class="tooltip-label">Total:</span>
-                      <span class="tooltip-value highlight">${formatCurrency(stateStats.funding)}</span>
-                    </div>
-                  </div>
-                  
-                  ${(selectedFundingTypes.includes('ihp') || selectedFundingTypes.includes('pa') || selectedFundingTypes.includes('cdbg_dr_allocation')) ? `
-                  <div class="tooltip-section">
-                    <h4>Funding</h4>
-                    <div class="tooltip-breakdown">
-                      ${selectedFundingTypes.includes('ihp') ? 
-                        `<div class="tooltip-stat">
-                          <span class="tooltip-label">IHP:</span>
-                          <span class="tooltip-value" style="color: #2171b5;">${formatCurrency(ihpTotal)}</span>
-                        </div>` : ''}
-                      
-                      ${selectedFundingTypes.includes('pa') ? 
-                        `<div class="tooltip-stat">
-                          <span class="tooltip-label">PA:</span>
-                          <span class="tooltip-value" style="color: #41B6E6;">${formatCurrency(paTotal)}</span>
-                        </div>` : ''}
-                      
-                      ${selectedFundingTypes.includes('cdbg_dr_allocation') ? 
-                        `<div class="tooltip-stat">
-                          <span class="tooltip-label">CDBG-DR:</span>
-                          <span class="tooltip-value" style="color: #89684F;">${formatCurrency(cdbgDrTotal)}</span>
-                        </div>` : ''}
-                    </div>
-                  </div>` : ''}
-                  
-                  <div class="tooltip-section">
-                    <h4>Top Disaster Types</h4>
-                    <div class="tooltip-types">
-                      ${Object.entries(stateStats.types)
-                        .sort((a, b) => stateStats.typesFunding[b[0]] - stateStats.typesFunding[a[0]])
-                        .slice(0, 3) // Show only top 3 disaster types
-                        .map(([type, count]) => `
-                          <div class="tooltip-disaster-type">
-                            <div class="tooltip-type-name">${type} <span class="event-count">(${count})</span></div>
-                            <div class="tooltip-type-funding">${formatCurrency(stateStats.typesFunding[type])}</div>
-                          </div>
-                        `).join('')}
-                    </div>
-                  </div>
-                ` : '<div class="tooltip-empty">No disaster data available</div>'}
-              </div>
-            </div>
-          `)
-          .addTo(map.current);
-
-        // Add CSS styles to the document head if not already added
-        if (!document.getElementById('disaster-map-tooltip-styles')) {
-          const styleElement = document.createElement('style');
-          styleElement.id = 'disaster-map-tooltip-styles';
-          styleElement.textContent = `
-            .disaster-map-tooltip {
-              font-family: "Source Sans 3", "Source Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              border-radius: 6px;
-              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-              padding: 0;
-              border: none;
-              overflow: hidden;
-            }
-            .disaster-map-tooltip .maplibregl-popup-content {
-              padding: 0;
-              border-radius: 6px;
-              overflow: hidden;
-            }
-            .tooltip-container {
-              display: flex;
-              flex-direction: column;
-              max-width: 100%;
-            }
-            .tooltip-header {
-              background-color: #003A63;
-              color: white;
-              padding: 6px 10px;
-              border-bottom: 1px solid #004d84;
-            }
-            .tooltip-header h3 {
-              margin: 0;
-              font-size: 14px;
-              font-weight: 600;
-            }
-            .tooltip-content {
-              padding: 8px;
-              font-size: 11px;
-            }
-            .tooltip-summary {
-              margin-bottom: 6px;
-              padding-bottom: 6px;
-              border-bottom: 1px solid #eaeaea;
-            }
-            .tooltip-section {
-              margin-top: 6px;
-            }
-            .tooltip-section h4 {
-              margin: 0 0 4px 0;
-              font-size: 12px;
-              font-weight: 600;
-              color: #003A63;
-            }
-            .tooltip-stat {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 2px;
-            }
-            .tooltip-label {
-              color: #555;
-              font-weight: 500;
-            }
-            .tooltip-value {
-              font-weight: 600;
-            }
-            .tooltip-value.highlight {
-              color: #00A79D;
-              font-weight: 700;
-            }
-            .tooltip-disaster-type {
-              border-top: 1px solid #f0f0f0;
-              padding: 3px 0;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            }
-            .tooltip-type-name {
-              font-weight: 600;
-              font-size: 11px;
-            }
-            .event-count {
-              font-weight: normal;
-              color: #666;
-              font-size: 10px;
-            }
-            .tooltip-type-funding {
-              font-weight: 600;
-              color: #00A79D;
-              font-size: 11px;
-            }
-            .tooltip-empty {
-              color: #777;
-              font-style: italic;
-              padding: 6px 0;
-              font-size: 11px;
-            }
-          `;
-          document.head.appendChild(styleElement);
-        }
+        // Set the selected state data for the modal
+        setSelectedStateData({
+          stateAbbr,
+          stateName,
+          stateStats,
+          ihpTotal,
+          paTotal,
+          cdbgDrTotal
+        });
       });
       
       // Change cursor on hover
@@ -759,16 +605,10 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
         }
       });
       
-      // Remove popup when mouse leaves the states layer
+      // Keep mouseleave to reset cursor, but remove popup logic
       map.current.on('mouseleave', 'states-layer', () => {
         if (map.current) {
           map.current.getCanvas().style.cursor = '';
-        }
-        
-        // Remove the popup when mouse leaves the states layer
-        if (popup.current) {
-          popup.current.remove();
-          popup.current = null;
         }
       });
     });
@@ -916,6 +756,97 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
           </div>
         </div>
       </div>
+
+      {/* State Info Modal */}
+      {selectedStateData && (
+        <div className="absolute top-0 left-0 w-80 h-full bg-white shadow-lg z-20 overflow-y-auto border-r border-gray-200">
+          <div className="flex flex-col h-full">
+            {/* Header with close button */}
+            <div className="bg-[#003A63] text-white p-4 flex justify-between items-center">
+              <h3 className="text-base font-semibold">{selectedStateData.stateName}</h3>
+              <button
+                onClick={() => setSelectedStateData(null)}
+                className="text-white hover:text-gray-300 transition-colors"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="flex-1 p-4 text-xs">
+              {selectedStateData.stateStats ? (
+                <>
+                  {/* Summary */}
+                  <div className="mb-5 pb-4 border-b border-gray-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-600 font-medium">Events:</span>
+                      <span className="font-semibold text-sm">{selectedStateData.stateStats.count}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 font-medium">Total Funding:</span>
+                      <span className="font-bold text-base text-[#00A79D]">{formatCurrency(selectedStateData.stateStats.funding)}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Funding Breakdown */}
+                  {(selectedFundingTypes.includes('ihp') || selectedFundingTypes.includes('pa') || selectedFundingTypes.includes('cdbg_dr_allocation')) && (
+                    <div className="mb-5 pb-4 border-b border-gray-200">
+                      <h4 className="font-semibold text-[#003A63] mb-3 text-sm">Funding Breakdown</h4>
+                      <div className="space-y-2">
+                        {selectedFundingTypes.includes('ihp') && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600 text-xs">FEMA Individual & Household Program:</span>
+                            <span className="font-semibold text-xs" style={{color: '#2171b5'}}>{formatCurrency(selectedStateData.ihpTotal)}</span>
+                          </div>
+                        )}
+                        
+                        {selectedFundingTypes.includes('pa') && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600 text-xs">FEMA Public Assistance:</span>
+                            <span className="font-semibold text-xs" style={{color: '#41B6E6'}}>{formatCurrency(selectedStateData.paTotal)}</span>
+                          </div>
+                        )}
+                        
+                        {selectedFundingTypes.includes('cdbg_dr_allocation') && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600 text-xs">HUD CDBG-DR:</span>
+                            <span className="font-semibold text-xs" style={{color: '#89684F'}}>{formatCurrency(selectedStateData.cdbgDrTotal)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Top Disaster Types */}
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-[#003A63] mb-3 text-sm">Top Disaster Types</h4>
+                    <div className="space-y-2">
+                      {Object.entries(selectedStateData.stateStats.types)
+                        .sort((a, b) => selectedStateData.stateStats.typesFunding[b[0]] - selectedStateData.stateStats.typesFunding[a[0]])
+                        .slice(0, 5) // Show top 5 disaster types instead of 3
+                        .map(([type, count]) => (
+                          <div key={type} className="flex justify-between items-center py-1">
+                            <span className="text-xs text-gray-700">
+                              {type} ({count as number} events)
+                            </span>
+                            <span className="text-xs font-semibold text-[#00A79D]">
+                              {formatCurrency(selectedStateData.stateStats.typesFunding[type])}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-gray-500 italic text-center py-8 text-xs">
+                  No disaster data available for this state
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
