@@ -21,7 +21,7 @@ interface DisasterData {
   // ... add other fields as needed
 }
 
-const DisasterDataDownloader = () => {
+const DisasterDataDownloaderJan25 = () => {
   const [data, setData] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({
@@ -65,7 +65,7 @@ const DisasterDataDownloader = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const response = await fetch('/data/disaster_dollar_database_2025_06_02.csv');
+        const response = await fetch('/data/Jan-25/disaster_dollar_database_2025_02_05.csv');
         const text = await response.text();
         Papa.parse(text, {
           header: true,
@@ -835,4 +835,4 @@ const DisasterDataDownloader = () => {
   );
 };
 
-export default DisasterDataDownloader;
+export default DisasterDataDownloaderJan25;
