@@ -10,6 +10,7 @@ interface StormData {
   ihpTotal: number;
   paTotal: number;
   cdbgDrTotal: number;
+  sbaTotal?: number;
   totalFunding: number;
   date?: string; // Optional date field
 }
@@ -19,13 +20,15 @@ interface DisasterFundingChartProps {
   title?: string;
   subtitle?: string;
   dateRange?: string; // New prop for date range
+  useSBAData?: boolean;
 }
 
-const DisasterFundingChart: React.FC<DisasterFundingChartProps> = ({ 
-  data, 
+const DisasterFundingChart: React.FC<DisasterFundingChartProps> = ({
+  data,
   title = '',
   subtitle = '',
-  dateRange
+  dateRange,
+  useSBAData = false
 }) => {
   // Format numbers to human-readable form (e.g., $1.2B)
   const formatNumber = (value: number) => {
@@ -57,6 +60,7 @@ const DisasterFundingChart: React.FC<DisasterFundingChartProps> = ({
   const femaIHPData = sortedData.map(d => d.ihpTotal);
   const femaPAData = sortedData.map(d => d.paTotal);
   const hudCDBGData = sortedData.map(d => d.cdbgDrTotal);
+  const sbaData = sortedData.map(d => d.sbaTotal || 0);
 
   // Calculate an appropriate chart height based on number of items
   const calculateChartHeight = () => {
@@ -186,22 +190,30 @@ const DisasterFundingChart: React.FC<DisasterFundingChartProps> = ({
       },
       itemDistance: 20
     },
-    series: [{
-      name: 'HUD CDBG-DR',
-      data: hudCDBGData,
-      color: '#89684F',
-      type: 'bar'
-    }, {
-      name: 'FEMA Public Assistance',
-      data: femaPAData,
-      color: '#41B6E6',
-      type: 'bar'
-    }, {
-      name: 'FEMA Individuals and Households Program',
-      data: femaIHPData,
-      color: '#2171b5',
-      type: 'bar'
-    }],
+    series: [
+      ...(useSBAData ? [{
+        name: 'SBA Disaster Loans',
+        data: sbaData,
+        color: '#228B22',
+        type: 'bar' as const
+      }] : []),
+      {
+        name: 'HUD CDBG-DR',
+        data: hudCDBGData,
+        color: '#89684F',
+        type: 'bar' as const
+      }, {
+        name: 'FEMA Public Assistance',
+        data: femaPAData,
+        color: '#41B6E6',
+        type: 'bar' as const
+      }, {
+        name: 'FEMA Individuals and Households Program',
+        data: femaIHPData,
+        color: '#2171b5',
+        type: 'bar' as const
+      }
+    ],
     credits: {
       enabled: false
     },

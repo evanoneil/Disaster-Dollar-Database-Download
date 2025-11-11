@@ -14,13 +14,17 @@ interface FundingBreakdownChartProps {
   ihpTotal: number;
   paTotal: number;
   cdbgTotal: number;
+  sbaTotal?: number;
+  useSBAData?: boolean;
   title?: string;
 }
 
-const FundingBreakdownChart: React.FC<FundingBreakdownChartProps> = ({ 
+const FundingBreakdownChart: React.FC<FundingBreakdownChartProps> = ({
   ihpTotal,
   paTotal,
   cdbgTotal,
+  sbaTotal = 0,
+  useSBAData = false,
   title = "Funding Breakdown by Source"
 }) => {
   // Format numbers to human-readable form (e.g., $1.2B)
@@ -51,10 +55,15 @@ const FundingBreakdownChart: React.FC<FundingBreakdownChartProps> = ({
       name: 'HUD CDBG-DR',
       amount: cdbgTotal,
       color: '#89684F'
-    }
+    },
+    ...(useSBAData ? [{
+      name: 'SBA Disaster Loans',
+      amount: sbaTotal,
+      color: '#228B22'
+    }] : [])
   ].filter(item => item.amount > 0); // Only show funding sources with actual amounts
 
-  const totalFunding = ihpTotal + paTotal + cdbgTotal;
+  const totalFunding = ihpTotal + paTotal + cdbgTotal + (useSBAData ? sbaTotal : 0);
 
   // Calculate percentages
   const dataWithPercentages = fundingData.map(item => ({

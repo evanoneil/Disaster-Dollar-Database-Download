@@ -20,6 +20,7 @@ interface DisasterData {
   ihp_total: number;
   pa_total: number;
   cdbg_dr_allocation: number;
+  sba_total_approved_loan_amount: number;
   incident_number: number;
   declaration_date: string;
   declaration_url: string;
@@ -90,13 +91,15 @@ interface FactSheetDisplayProps {
   allEvents: DisasterData[];
   selectedEvents?: DisasterData[];
   stateNames: Record<string, string>;
+  useSBAData?: boolean;
 }
 
-const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({ 
-  event, 
+const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
+  event,
   allEvents,
   selectedEvents = [],
-  stateNames 
+  stateNames,
+  useSBAData = false
 }) => {
   const stateName = stateNames[event.state as keyof typeof stateNames] || event.state;
   const multipleEventsSelected = selectedEvents.length > 1;
@@ -221,20 +224,24 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
     
     // Helper function to calculate total funding for an event
     const calculateEventTotalFunding = (item: DisasterData) => {
-      const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total : 
+      const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total :
                      (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
-      
-      const paTotal = typeof item.pa_total === 'number' ? item.pa_total : 
+
+      const paTotal = typeof item.pa_total === 'number' ? item.pa_total :
                      (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
-      
-      const cdbgDrAllocation = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+
+      const cdbgDrAllocation = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
                               (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
-      
+
+      const sbaTotal = typeof item.sba_total_approved_loan_amount === 'number' ? item.sba_total_approved_loan_amount :
+                      (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0);
+
       return {
         ihpTotal,
         paTotal,
         cdbgDrAllocation,
-        totalFunding: ihpTotal + paTotal + cdbgDrAllocation
+        sbaTotal,
+        totalFunding: ihpTotal + paTotal + cdbgDrAllocation + (useSBAData ? sbaTotal : 0)
       };
     };
     
@@ -279,6 +286,7 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
         ihpTotal: funding.ihpTotal,
         paTotal: funding.paTotal,
         cdbgDrTotal: funding.cdbgDrAllocation,
+        sbaTotal: funding.sbaTotal,
         totalFunding: funding.totalFunding,
         state: event.state,
         stateName,
@@ -287,12 +295,13 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
         applicants: applicants
       };
     });
-    
+
     // Calculate grand totals
     const grandTotals = {
       ihpTotal: totalsByEvent.reduce((sum, e) => sum + e.ihpTotal, 0),
       paTotal: totalsByEvent.reduce((sum, e) => sum + e.paTotal, 0),
       cdbgDrTotal: totalsByEvent.reduce((sum, e) => sum + e.cdbgDrTotal, 0),
+      sbaTotal: totalsByEvent.reduce((sum, e) => sum + e.sbaTotal, 0),
       totalFunding: totalsByEvent.reduce((sum, e) => sum + e.totalFunding, 0),
       totalApplicants: totalsByEvent.reduce((sum, e) => sum + e.applicants, 0)
     };
@@ -334,20 +343,24 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
     // Ensure all values are properly parsed as numbers
     const calculateFunding = (item: DisasterData) => {
       // Convert any string values to numbers and handle nullish values
-      const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total : 
+      const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total :
                      (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
-      
-      const paTotal = typeof item.pa_total === 'number' ? item.pa_total : 
+
+      const paTotal = typeof item.pa_total === 'number' ? item.pa_total :
                      (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
-      
-      const cdbgDrAllocation = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+
+      const cdbgDrAllocation = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
                               (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
-      
+
+      const sbaTotal = typeof item.sba_total_approved_loan_amount === 'number' ? item.sba_total_approved_loan_amount :
+                      (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0);
+
       return {
         ihpTotal,
-        paTotal, 
+        paTotal,
         cdbgDrAllocation,
-        total: ihpTotal + paTotal + cdbgDrAllocation
+        sbaTotal,
+        total: ihpTotal + paTotal + cdbgDrAllocation + (useSBAData ? sbaTotal : 0)
       };
     };
     
@@ -478,22 +491,26 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
     // Helper function to calculate total funding for each event with improved error handling
     const calculateEventTotalFunding = (item: DisasterData) => {
       // More robust parsing with fallbacks for all funding sources
-      const ihpTotal = typeof item.ihp_total === 'number' && !isNaN(item.ihp_total) ? item.ihp_total : 
+      const ihpTotal = typeof item.ihp_total === 'number' && !isNaN(item.ihp_total) ? item.ihp_total :
                      (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
-      
-      const paTotal = typeof item.pa_total === 'number' && !isNaN(item.pa_total) ? item.pa_total : 
+
+      const paTotal = typeof item.pa_total === 'number' && !isNaN(item.pa_total) ? item.pa_total :
                      (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
-      
-      const cdbgDrAllocation = typeof item.cdbg_dr_allocation === 'number' && !isNaN(item.cdbg_dr_allocation) ? item.cdbg_dr_allocation : 
+
+      const cdbgDrAllocation = typeof item.cdbg_dr_allocation === 'number' && !isNaN(item.cdbg_dr_allocation) ? item.cdbg_dr_allocation :
                               (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
-      
+
+      const sbaTotal = typeof item.sba_total_approved_loan_amount === 'number' && !isNaN(item.sba_total_approved_loan_amount) ? item.sba_total_approved_loan_amount :
+                      (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0);
+
       // Calculate total and report any suspiciously large values for logging
-      const totalFunding = ihpTotal + paTotal + cdbgDrAllocation;
-      
+      const totalFunding = ihpTotal + paTotal + cdbgDrAllocation + (useSBAData ? sbaTotal : 0);
+
       return {
         ihpTotal,
         paTotal,
         cdbgDrAllocation,
+        sbaTotal,
         totalFunding
       };
     };
@@ -627,6 +644,7 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
         ihpTotal: item.calculatedFunding.ihpTotal,
         paTotal: item.calculatedFunding.paTotal,
         cdbgDrTotal: item.calculatedFunding.cdbgDrAllocation,
+        sbaTotal: item.calculatedFunding.sbaTotal,
         totalFunding: item.calculatedFunding.totalFunding,
         date: item.incident_start // Include the date for reference
       };
@@ -1026,32 +1044,36 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
         let totalIHP = 0;
         let totalPA = 0;
         let totalCDBG = 0;
-        
+        let totalSBA = 0;
+
         if (multipleEventsSelected && combinedFundingStats) {
           // For multiple events, use the combined stats
           totalIHP = combinedFundingStats.grandTotals.ihpTotal;
           totalPA = combinedFundingStats.grandTotals.paTotal;
           totalCDBG = combinedFundingStats.grandTotals.cdbgDrTotal;
+          totalSBA = combinedFundingStats.grandTotals.sbaTotal;
         } else {
           // For single event, use only the selected event's data
-          totalIHP = typeof primaryEvent.ihp_total === 'number' ? primaryEvent.ihp_total : 
+          totalIHP = typeof primaryEvent.ihp_total === 'number' ? primaryEvent.ihp_total :
                     (typeof primaryEvent.ihp_total === 'string' ? parseFloat(primaryEvent.ihp_total) || 0 : 0);
-          totalPA = typeof primaryEvent.pa_total === 'number' ? primaryEvent.pa_total : 
+          totalPA = typeof primaryEvent.pa_total === 'number' ? primaryEvent.pa_total :
                    (typeof primaryEvent.pa_total === 'string' ? parseFloat(primaryEvent.pa_total) || 0 : 0);
-          totalCDBG = typeof primaryEvent.cdbg_dr_allocation === 'number' ? primaryEvent.cdbg_dr_allocation : 
+          totalCDBG = typeof primaryEvent.cdbg_dr_allocation === 'number' ? primaryEvent.cdbg_dr_allocation :
                      (typeof primaryEvent.cdbg_dr_allocation === 'string' ? parseFloat(primaryEvent.cdbg_dr_allocation) || 0 : 0);
+          totalSBA = typeof primaryEvent.sba_total_approved_loan_amount === 'number' ? primaryEvent.sba_total_approved_loan_amount :
+                    (typeof primaryEvent.sba_total_approved_loan_amount === 'string' ? parseFloat(primaryEvent.sba_total_approved_loan_amount) || 0 : 0);
         }
-        
-        const grandTotal = totalIHP + totalPA + totalCDBG;
+
+        const grandTotal = totalIHP + totalPA + totalCDBG + (useSBAData ? totalSBA : 0);
         
         // Only show if there's actually funding data
         if (grandTotal > 0) {
           return (
             <div className="mb-8 border-t pt-8">
               <h2 className="text-xl font-bold mb-4 text-[#003A63]">Total Funding by Source</h2>
-              
+
               {/* Summary cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+              <div className={`grid grid-cols-1 ${useSBAData ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-3 mb-6`}>
                 <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col h-24 justify-end">
                   <h4 className="text-sm font-semibold text-[#003A63] mb-2 line-clamp-2">Grand Total</h4>
                   <p className="text-xl font-bold text-[#00A79D] mt-auto">{formatCurrency(grandTotal)}</p>
@@ -1068,14 +1090,22 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
                   <h4 className="text-sm font-semibold text-[#003A63] mb-2 line-clamp-2">HUD CDBG-DR</h4>
                   <p className="text-xl font-bold text-[#89684F] mt-auto">{formatCurrency(totalCDBG)}</p>
                 </div>
+                {useSBAData && (
+                  <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col h-24 justify-end">
+                    <h4 className="text-sm font-semibold text-[#003A63] mb-2 line-clamp-2">SBA Disaster Loans</h4>
+                    <p className="text-xl font-bold text-[#228B22] mt-auto">{formatCurrency(totalSBA)}</p>
+                  </div>
+                )}
               </div>
               
               {/* Chart visualization */}
               <div className="mb-4">
-                <FundingBreakdownChart 
+                <FundingBreakdownChart
                   ihpTotal={totalIHP}
                   paTotal={totalPA}
                   cdbgTotal={totalCDBG}
+                  sbaTotal={totalSBA}
+                  useSBAData={useSBAData}
                 />
               </div>
             </div>
@@ -1179,10 +1209,11 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
         <h2 className="text-xl font-bold mb-4 text-[#003A63]">
           Funding for Major Disasters by Source in {stateName}
         </h2>
-        <DisasterFundingChart 
+        <DisasterFundingChart
           data={majorStormsData.data}
           dateRange={majorStormsData.dateRange}
           title=""
+          useSBAData={useSBAData}
         />
       </div>
       

@@ -15,13 +15,18 @@ interface DisasterData {
   ihp_total: number;
   pa_total: number;
   cdbg_dr_allocation: number;
+  sba_total_approved_loan_amount: number;
   incident_number: number;
   declaration_date: string;
   declaration_url: string;
   // ... add other fields as needed
 }
 
-const DisasterDataDownloader = () => {
+interface DisasterDataDownloaderProps {
+  useSBAData?: boolean;
+}
+
+const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAData = false }) => {
   const [data, setData] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({
@@ -32,7 +37,9 @@ const DisasterDataDownloader = () => {
   });
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
-  const [selectedFundingTypes, setSelectedFundingTypes] = useState<string[]>(['ihp', 'pa', 'cdbg_dr_allocation']);
+  const [selectedFundingTypes, setSelectedFundingTypes] = useState<string[]>(
+    useSBAData ? ['ihp', 'pa', 'cdbg_dr_allocation', 'sba'] : ['ihp', 'pa', 'cdbg_dr_allocation']
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortColumn, setSortColumn] = useState<string>('incident_start');
@@ -65,7 +72,10 @@ const DisasterDataDownloader = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const response = await fetch('/data/disaster_dollar_database_2025_06_02.csv');
+        const csvFile = useSBAData
+          ? '/data/disaster_dollar_database_with_sba_2025_11_11.csv'
+          : '/data/disaster_dollar_database_2025_06_02.csv';
+        const response = await fetch(csvFile);
         const text = await response.text();
         Papa.parse(text, {
           header: true,
@@ -135,12 +145,18 @@ const DisasterDataDownloader = () => {
         }
         
         if (!fundingMatch && selectedFundingTypes.includes('cdbg_dr_allocation')) {
-          const cdbgValue = typeof row.cdbg_dr_allocation === 'number' ? row.cdbg_dr_allocation : 
+          const cdbgValue = typeof row.cdbg_dr_allocation === 'number' ? row.cdbg_dr_allocation :
                           (typeof row.cdbg_dr_allocation === 'string' ? parseFloat(row.cdbg_dr_allocation) || 0 : 0);
           if (cdbgValue > 0) fundingMatch = true;
         }
+
+        if (!fundingMatch && selectedFundingTypes.includes('sba')) {
+          const sbaValue = typeof row.sba_total_approved_loan_amount === 'number' ? row.sba_total_approved_loan_amount :
+                          (typeof row.sba_total_approved_loan_amount === 'string' ? parseFloat(row.sba_total_approved_loan_amount) || 0 : 0);
+          if (sbaValue > 0) fundingMatch = true;
+        }
       }
-      
+
       return dateMatch && stateMatch && typeMatch && fundingMatch;
     });
   }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes, data, loading, includesTerritories, territories]);
@@ -257,7 +273,7 @@ const DisasterDataDownloader = () => {
         <div className="flex flex-col md:flex-row md:space-x-4">
           {/* Location Selection */}
           <div className="md:w-1/3 mb-6 md:mb-0">
-            <div className="border rounded-lg h-[320px] flex flex-col">
+            <div className={`border rounded-lg ${useSBAData ? 'h-[400px]' : 'h-[320px]'} flex flex-col`}>
               <div className="p-2 border-b flex justify-between items-center bg-gray-50">
                 <span className="text-sm font-medium text-[#003A63]">Filter by Location</span>
                 <div className="space-x-2">
@@ -327,7 +343,7 @@ const DisasterDataDownloader = () => {
 
           {/* Disaster Type Selection */}
           <div className="md:w-1/3 mb-6 md:mb-0">
-            <div className="border rounded-lg h-[320px] flex flex-col">
+            <div className={`border rounded-lg ${useSBAData ? 'h-[400px]' : 'h-[320px]'} flex flex-col`}>
               <div className="p-2 border-b flex justify-between items-center bg-gray-50">
                 <span className="text-sm font-medium text-[#003A63]">Filter by Disaster Type</span>
                 <div className="space-x-2">
@@ -380,12 +396,14 @@ const DisasterDataDownloader = () => {
           
           {/* Funding Type Selection */}
           <div className="md:w-1/3">
-            <div className="border rounded-lg h-[320px] flex flex-col">
+            <div className={`border rounded-lg ${useSBAData ? 'h-[400px]' : 'h-[320px]'} flex flex-col`}>
               <div className="p-2 border-b flex justify-between items-center bg-gray-50">
                 <span className="text-sm font-medium text-[#003A63]">Filter by Funding Type</span>
                 <div className="space-x-2">
                   <button
-                    onClick={() => setSelectedFundingTypes(['ihp', 'pa', 'cdbg_dr_allocation'])}
+                    onClick={() => setSelectedFundingTypes(
+                      useSBAData ? ['ihp', 'pa', 'cdbg_dr_allocation', 'sba'] : ['ihp', 'pa', 'cdbg_dr_allocation']
+                    )}
                     className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
                   >
                     Select All
@@ -454,6 +472,26 @@ const DisasterDataDownloader = () => {
                       <p className="text-xs text-gray-500 mt-1">Community Development Block Grant Disaster Recovery</p>
                     </div>
                   </label>
+                  {useSBAData && (
+                    <label className="flex items-center space-x-2 p-2 border rounded-md hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={selectedFundingTypes.includes('sba')}
+                        onChange={(e) => {
+                          setSelectedFundingTypes(
+                            e.target.checked
+                              ? [...selectedFundingTypes, 'sba']
+                              : selectedFundingTypes.filter(t => t !== 'sba')
+                          );
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <div>
+                        <span className="text-sm font-medium">SBA Disaster Loans</span>
+                        <p className="text-xs text-gray-500 mt-1">Small Business Administration disaster loan approvals</p>
+                      </div>
+                    </label>
+                  )}
                 </div>
               </div>
             </div>
@@ -493,12 +531,13 @@ const DisasterDataDownloader = () => {
               {
                 label: "Funding Types",
                 value: selectedFundingTypes.length === 0 ? 'None selected' :
-                  selectedFundingTypes.length === 3 ? 'All funding types' :
+                  selectedFundingTypes.length === (useSBAData ? 4 : 3) ? 'All funding types' :
                   selectedFundingTypes.map(type => {
                     switch(type) {
                       case 'ihp': return 'IHP';
                       case 'pa': return 'PA';
                       case 'cdbg_dr_allocation': return 'CDBG-DR';
+                      case 'sba': return 'SBA';
                       default: return type;
                     }
                   }).join(', ')
@@ -525,12 +564,18 @@ const DisasterDataDownloader = () => {
               }, 0);
               
               const totalCDBG = filteredData.reduce((sum, item) => {
-                const cdbgTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+                const cdbgTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
                                (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
                 return sum + (selectedFundingTypes.includes('cdbg_dr_allocation') ? cdbgTotal : 0);
               }, 0);
-              
-              const grandTotal = totalIHP + totalPA + totalCDBG;
+
+              const totalSBA = filteredData.reduce((sum, item) => {
+                const sbaTotal = typeof item.sba_total_approved_loan_amount === 'number' ? item.sba_total_approved_loan_amount :
+                               (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0);
+                return sum + (selectedFundingTypes.includes('sba') ? sbaTotal : 0);
+              }, 0);
+
+              const grandTotal = totalIHP + totalPA + totalCDBG + totalSBA;
               
               // Helper function to format currency
               const formatCurrency = (amount: number): string => {
@@ -542,25 +587,15 @@ const DisasterDataDownloader = () => {
               };
 
               return (
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="md:flex-1 flex flex-col md:flex-row gap-3">
-                    {/* Number of Disaster Events Box */}
-                    <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
-                      <h3 className="text-xl font-bold text-[#003A63] mb-2">Disaster Events</h3>
-                      <p className="text-3xl font-bold text-[#003A63]">{formatNumber(filteredData.length)}</p>
-                      <p className="text-sm text-gray-500 mt-1">Total events matching filters</p>
-                    </div>
-                    
-                    {/* Grand Total Box */}
-                    <div className="flex-1 bg-white p-4 rounded-lg border border-[#E6E7E8] shadow-sm">
-                      <h3 className="text-xl font-bold text-[#00A79D] mb-2">Grand Total</h3>
-                      <p className="text-3xl font-bold text-[#00A79D]">{formatCurrency(grandTotal)}</p>
-                      <p className="text-sm text-gray-500 mt-1">All selected funding types</p>
-                    </div>
+                <div>
+                  {/* Summary Text Above Boxes */}
+                  <div className="mb-3 text-sm text-gray-700">
+                    <span className="font-semibold">{formatNumber(filteredData.length)}</span> disaster events matching filters |
+                    <span className="font-semibold text-[#00A79D]"> Grand Total: {formatCurrency(grandTotal)}</span> (all selected funding types)
                   </div>
-                  
-                  <div className="flex-1">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-full">
+
+                  {/* Funding Type Boxes */}
+                  <div className={`grid grid-cols-1 ${useSBAData ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3`}>
                       {selectedFundingTypes.includes('ihp') && (
                         <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
                           <div>
@@ -570,7 +605,7 @@ const DisasterDataDownloader = () => {
                           <div></div> {/* Empty div for consistent spacing */}
                         </div>
                       )}
-                      
+
                       {selectedFundingTypes.includes('pa') && (
                         <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
                           <div>
@@ -580,7 +615,7 @@ const DisasterDataDownloader = () => {
                           <div></div> {/* Empty div for consistent spacing */}
                         </div>
                       )}
-                      
+
                       {selectedFundingTypes.includes('cdbg_dr_allocation') && (
                         <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
                           <div>
@@ -590,7 +625,16 @@ const DisasterDataDownloader = () => {
                           <div></div> {/* Empty div for consistent spacing */}
                         </div>
                       )}
-                    </div>
+
+                      {selectedFundingTypes.includes('sba') && useSBAData && (
+                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
+                          <div>
+                            <h4 className="text-sm font-semibold text-[#003A63]">SBA Disaster Loan<br />Approvals Total</h4>
+                            <p className="text-xl font-bold text-[#228B22] mt-1">{formatCurrency(totalSBA)}</p>
+                          </div>
+                          <div></div> {/* Empty div for consistent spacing */}
+                        </div>
+                      )}
                   </div>
                 </div>
               );
@@ -655,12 +699,13 @@ const DisasterDataDownloader = () => {
                 <span className="font-medium text-gray-600">Funding Types:</span>
                 <p className="text-gray-800">
                   {selectedFundingTypes.length === 0 ? 'None selected' :
-                   selectedFundingTypes.length === 3 ? 'All funding types' :
+                   selectedFundingTypes.length === (useSBAData ? 4 : 3) ? 'All funding types' :
                    selectedFundingTypes.map(type => {
                      switch(type) {
                        case 'ihp': return 'IHP';
                        case 'pa': return 'PA';
                        case 'cdbg_dr_allocation': return 'CDBG-DR';
+                       case 'sba': return 'SBA';
                        default: return type;
                      }
                    }).join(', ')

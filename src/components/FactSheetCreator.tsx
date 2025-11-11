@@ -14,6 +14,7 @@ interface DisasterData {
   ihp_total: number;
   pa_total: number;
   cdbg_dr_allocation: number;
+  sba_total_approved_loan_amount: number;
   incident_number: number;
   declaration_date: string;
   declaration_url: string;
@@ -22,7 +23,11 @@ interface DisasterData {
   // ... add other fields as needed
 }
 
-const FactSheetCreator = () => {
+interface FactSheetCreatorProps {
+  useSBAData?: boolean;
+}
+
+const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false }) => {
   const [data, setData] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,7 +57,10 @@ const FactSheetCreator = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const response = await fetch('/data/disaster_dollar_database_2025_06_02.csv');
+        const csvFile = useSBAData
+          ? '/data/disaster_dollar_database_with_sba_2025_11_11.csv'
+          : '/data/disaster_dollar_database_2025_06_02.csv';
+        const response = await fetch(csvFile);
         const text = await response.text();
         Papa.parse(text, {
           header: true,
@@ -110,10 +118,12 @@ const FactSheetCreator = () => {
                   year,
                   ihp_applicants: ihpApplicants,
                   ihp_total: ihpTotal,
-                  pa_total: typeof item.pa_total === 'number' ? item.pa_total : 
+                  pa_total: typeof item.pa_total === 'number' ? item.pa_total :
                            (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0),
-                  cdbg_dr_allocation: typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
-                                     (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0)
+                  cdbg_dr_allocation: typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
+                                     (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0),
+                  sba_total_approved_loan_amount: typeof item.sba_total_approved_loan_amount === 'number' ? item.sba_total_approved_loan_amount :
+                                                 (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0)
                 };
               });
             
@@ -295,11 +305,12 @@ const FactSheetCreator = () => {
 
       {/* Fact Sheet Display */}
       {selectedEvent && (
-        <FactSheetDisplay 
-          event={selectedEvent} 
+        <FactSheetDisplay
+          event={selectedEvent}
           allEvents={data}
           selectedEvents={[selectedEvent]}
           stateNames={stateNames}
+          useSBAData={useSBAData}
         />
       )}
 
