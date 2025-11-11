@@ -14,6 +14,7 @@ interface DisasterData {
   ihp_total: number;
   pa_total: number;
   cdbg_dr_allocation: number;
+  sba_total_approved_loan_amount: number;
   incident_number: number;
   declaration_date: string;
   declaration_url: string;
