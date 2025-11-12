@@ -58,7 +58,7 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
     const loadData = async () => {
       try {
         const csvFile = useSBAData
-          ? '/data/disaster_dollar_database_with_sba_2025_11_11.csv'
+          ? '/data/disaster_dollar_database_with_sba_pa_fix_2025_11_12.csv'
           : '/data/disaster_dollar_database_2025_06_02.csv';
         const response = await fetch(csvFile);
         const text = await response.text();

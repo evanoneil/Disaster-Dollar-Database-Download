@@ -28,12 +28,12 @@ const DisasterDataDownloaderJan25 = () => {
   const [dateRange, setDateRange] = useState({
     startYear: 2015,
     startMonth: 1,
-    endYear: new Date().getFullYear(),
-    endMonth: new Date().getMonth() + 1,
+    endYear: 2025,
+    endMonth: 10,
   });
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
-  const [selectedFundingTypes, setSelectedFundingTypes] = useState<string[]>(['ihp', 'pa', 'cdbg_dr_allocation']);
+  const [selectedFundingTypes, setSelectedFundingTypes] = useState<string[]>(['ihp', 'pa', 'cdbg_dr_allocation', 'sba_total_approved_loan_amount']);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortColumn, setSortColumn] = useState<string>('incident_start');
@@ -136,12 +136,18 @@ const DisasterDataDownloaderJan25 = () => {
         }
         
         if (!fundingMatch && selectedFundingTypes.includes('cdbg_dr_allocation')) {
-          const cdbgValue = typeof row.cdbg_dr_allocation === 'number' ? row.cdbg_dr_allocation : 
+          const cdbgValue = typeof row.cdbg_dr_allocation === 'number' ? row.cdbg_dr_allocation :
                           (typeof row.cdbg_dr_allocation === 'string' ? parseFloat(row.cdbg_dr_allocation) || 0 : 0);
           if (cdbgValue > 0) fundingMatch = true;
         }
+
+        if (!fundingMatch && selectedFundingTypes.includes('sba_total_approved_loan_amount')) {
+          const sbaValue = typeof row.sba_total_approved_loan_amount === 'number' ? row.sba_total_approved_loan_amount :
+                          (typeof row.sba_total_approved_loan_amount === 'string' ? parseFloat(row.sba_total_approved_loan_amount) || 0 : 0);
+          if (sbaValue > 0) fundingMatch = true;
+        }
       }
-      
+
       return dateMatch && stateMatch && typeMatch && fundingMatch;
     });
   }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes, data, loading, includesTerritories, territories]);
@@ -386,7 +392,7 @@ const DisasterDataDownloaderJan25 = () => {
                 <span className="text-sm font-medium text-[#003A63]">Filter by Funding Type</span>
                 <div className="space-x-2">
                   <button
-                    onClick={() => setSelectedFundingTypes(['ihp', 'pa', 'cdbg_dr_allocation'])}
+                    onClick={() => setSelectedFundingTypes(['ihp', 'pa', 'cdbg_dr_allocation', 'sba_total_approved_loan_amount'])}
                     className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
                   >
                     Select All
@@ -455,6 +461,24 @@ const DisasterDataDownloaderJan25 = () => {
                       <p className="text-xs text-gray-500 mt-1">Community Development Block Grant Disaster Recovery</p>
                     </div>
                   </label>
+                  <label className="flex items-center space-x-2 p-2 border rounded-md hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedFundingTypes.includes('sba_total_approved_loan_amount')}
+                      onChange={(e) => {
+                        setSelectedFundingTypes(
+                          e.target.checked
+                            ? [...selectedFundingTypes, 'sba_total_approved_loan_amount']
+                            : selectedFundingTypes.filter(t => t !== 'sba_total_approved_loan_amount')
+                        );
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <div>
+                      <span className="text-sm font-medium">SBA Disaster Loans</span>
+                      <p className="text-xs text-gray-500 mt-1">Small Business Administration Approved Disaster Loan Amount</p>
+                    </div>
+                  </label>
                 </div>
               </div>
             </div>
@@ -494,12 +518,13 @@ const DisasterDataDownloaderJan25 = () => {
               {
                 label: "Funding Types",
                 value: selectedFundingTypes.length === 0 ? 'None selected' :
-                  selectedFundingTypes.length === 3 ? 'All funding types' :
+                  selectedFundingTypes.length === 4 ? 'All funding types' :
                   selectedFundingTypes.map(type => {
                     switch(type) {
                       case 'ihp': return 'IHP';
                       case 'pa': return 'PA';
                       case 'cdbg_dr_allocation': return 'CDBG-DR';
+                      case 'sba_total_approved_loan_amount': return 'SBA';
                       default: return type;
                     }
                   }).join(', ')
@@ -526,12 +551,18 @@ const DisasterDataDownloaderJan25 = () => {
               }, 0);
               
               const totalCDBG = filteredData.reduce((sum, item) => {
-                const cdbgTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+                const cdbgTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
                                (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
                 return sum + (selectedFundingTypes.includes('cdbg_dr_allocation') ? cdbgTotal : 0);
               }, 0);
-              
-              const grandTotal = totalIHP + totalPA + totalCDBG;
+
+              const totalSBA = filteredData.reduce((sum, item) => {
+                const sbaTotal = typeof item.sba_total_approved_loan_amount === 'number' ? item.sba_total_approved_loan_amount :
+                               (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0);
+                return sum + (selectedFundingTypes.includes('sba_total_approved_loan_amount') ? sbaTotal : 0);
+              }, 0);
+
+              const grandTotal = totalIHP + totalPA + totalCDBG + totalSBA;
               
               // Helper function to format currency
               const formatCurrency = (amount: number): string => {
@@ -561,7 +592,7 @@ const DisasterDataDownloaderJan25 = () => {
                   </div>
                   
                   <div className="flex-1">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-full">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 h-full">
                       {selectedFundingTypes.includes('ihp') && (
                         <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
                           <div>
@@ -591,6 +622,16 @@ const DisasterDataDownloaderJan25 = () => {
                           <div></div> {/* Empty div for consistent spacing */}
                         </div>
                       )}
+
+                      {selectedFundingTypes.includes('sba_total_approved_loan_amount') && (
+                        <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
+                          <div>
+                            <h4 className="text-sm font-semibold text-[#003A63]">SBA Approved Disaster<br />Loan Total</h4>
+                            <p className="text-xl font-bold text-[#F7931E] mt-1">{formatCurrency(totalSBA)}</p>
+                          </div>
+                          <div></div> {/* Empty div for consistent spacing */}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -610,7 +651,7 @@ const DisasterDataDownloaderJan25 = () => {
           
           {/* Map Description */}
           <p className="text-sm text-gray-600 mb-4">
-            Explore the geographic distribution of disaster events and funding. Each point represents a disaster event, with size and color indicating funding amounts across the selected funding types.
+            Explore the geographic distribution of disaster events and funding. Color of states indicate funding amounts across the selected funding types and date range.
           </p>
           
           {/* Current Filters Readout */}
@@ -656,12 +697,13 @@ const DisasterDataDownloaderJan25 = () => {
                 <span className="font-medium text-gray-600">Funding Types:</span>
                 <p className="text-gray-800">
                   {selectedFundingTypes.length === 0 ? 'None selected' :
-                   selectedFundingTypes.length === 3 ? 'All funding types' :
+                   selectedFundingTypes.length === 4 ? 'All funding types' :
                    selectedFundingTypes.map(type => {
                      switch(type) {
                        case 'ihp': return 'IHP';
                        case 'pa': return 'PA';
                        case 'cdbg_dr_allocation': return 'CDBG-DR';
+                       case 'sba_total_approved_loan_amount': return 'SBA';
                        default: return type;
                      }
                    }).join(', ')

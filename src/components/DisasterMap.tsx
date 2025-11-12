@@ -207,6 +207,7 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
     ihpTotal: number;
     paTotal: number;
     cdbgDrTotal: number;
+    sbaTotal: number;
   } | null>(null);
   
   // Function to create a color expression with literal values
@@ -352,11 +353,17 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
         }
         
         if (selectedFundingTypes.includes('cdbg_dr_allocation')) {
-          const cdbgDrTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+          const cdbgDrTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
                              (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
           territoryFunding += cdbgDrTotal;
         }
-        
+
+        if (selectedFundingTypes.includes('sba') || selectedFundingTypes.includes('sba_total_approved_loan_amount')) {
+          const sbaTotal = typeof item.sba_total_approved_loan_amount === 'number' ? item.sba_total_approved_loan_amount :
+                          (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0);
+          territoryFunding += sbaTotal;
+        }
+
         territoriesData[state] += territoryFunding;
         
         return;
@@ -378,28 +385,35 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
       let ihpTotal = 0;
       let paTotal = 0;
       let cdbgDrTotal = 0;
-      
+      let sbaTotal = 0;
+
       if (selectedFundingTypes.includes('ihp')) {
-        ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total : 
+        ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total :
                   (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
         totalFunding += ihpTotal;
       }
-      
+
       if (selectedFundingTypes.includes('pa')) {
-        paTotal = typeof item.pa_total === 'number' ? item.pa_total : 
+        paTotal = typeof item.pa_total === 'number' ? item.pa_total :
                  (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
         totalFunding += paTotal;
       }
-      
+
       if (selectedFundingTypes.includes('cdbg_dr_allocation')) {
-        cdbgDrTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+        cdbgDrTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
                      (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
         totalFunding += cdbgDrTotal;
       }
-      
+
+      if (selectedFundingTypes.includes('sba') || selectedFundingTypes.includes('sba_total_approved_loan_amount')) {
+        sbaTotal = typeof item.sba_total_approved_loan_amount === 'number' ? item.sba_total_approved_loan_amount :
+                  (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0);
+        totalFunding += sbaTotal;
+      }
+
       // Debug: Log individual funding values
       if (totalFunding > 0) {
-        console.log(`Funding for ${state}: IHP=${ihpTotal}, PA=${paTotal}, CDBG-DR=${cdbgDrTotal}, Total=${totalFunding}`);
+        console.log(`Funding for ${state}: IHP=${ihpTotal}, PA=${paTotal}, CDBG-DR=${cdbgDrTotal}, SBA=${sbaTotal}, Total=${totalFunding}`);
       }
       
       stateData[state].funding += totalFunding;
@@ -582,11 +596,19 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
         const cdbgDrTotal = filteredData
           .filter(item => item.state === stateAbbr && selectedFundingTypes.includes('cdbg_dr_allocation'))
           .reduce((sum, item) => {
-            const cdbgDr = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation : 
+            const cdbgDr = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
                          (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
             return sum + cdbgDr;
           }, 0);
-        
+
+        const sbaTotal = filteredData
+          .filter(item => item.state === stateAbbr && (selectedFundingTypes.includes('sba') || selectedFundingTypes.includes('sba_total_approved_loan_amount')))
+          .reduce((sum, item) => {
+            const sba = typeof item.sba_total_approved_loan_amount === 'number' ? item.sba_total_approved_loan_amount :
+                       (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0);
+            return sum + sba;
+          }, 0);
+
         // Set the selected state data for the modal
         setSelectedStateData({
           stateAbbr,
@@ -594,7 +616,8 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
           stateStats,
           ihpTotal,
           paTotal,
-          cdbgDrTotal
+          cdbgDrTotal,
+          sbaTotal
         });
       });
       
@@ -790,7 +813,7 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
                   </div>
                   
                   {/* Funding Breakdown */}
-                  {(selectedFundingTypes.includes('ihp') || selectedFundingTypes.includes('pa') || selectedFundingTypes.includes('cdbg_dr_allocation')) && (
+                  {(selectedFundingTypes.includes('ihp') || selectedFundingTypes.includes('pa') || selectedFundingTypes.includes('cdbg_dr_allocation') || selectedFundingTypes.includes('sba') || selectedFundingTypes.includes('sba_total_approved_loan_amount')) && (
                     <div className="mb-5 pb-4 border-b border-gray-200">
                       <h4 className="font-semibold text-[#003A63] mb-3 text-sm">Funding Breakdown</h4>
                       <div className="space-y-2">
@@ -800,18 +823,25 @@ const DisasterMap: React.FC<DisasterMapProps> = ({ filteredData, stateNames, sel
                             <span className="font-semibold text-xs" style={{color: '#2171b5'}}>{formatCurrency(selectedStateData.ihpTotal)}</span>
                           </div>
                         )}
-                        
+
                         {selectedFundingTypes.includes('pa') && (
                           <div className="flex justify-between items-center">
                             <span className="text-gray-600 text-xs">FEMA Public Assistance:</span>
                             <span className="font-semibold text-xs" style={{color: '#41B6E6'}}>{formatCurrency(selectedStateData.paTotal)}</span>
                           </div>
                         )}
-                        
+
                         {selectedFundingTypes.includes('cdbg_dr_allocation') && (
                           <div className="flex justify-between items-center">
                             <span className="text-gray-600 text-xs">HUD CDBG-DR:</span>
                             <span className="font-semibold text-xs" style={{color: '#89684F'}}>{formatCurrency(selectedStateData.cdbgDrTotal)}</span>
+                          </div>
+                        )}
+
+                        {(selectedFundingTypes.includes('sba') || selectedFundingTypes.includes('sba_total_approved_loan_amount')) && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600 text-xs">SBA Disaster Loans:</span>
+                            <span className="font-semibold text-xs" style={{color: '#228B22'}}>{formatCurrency(selectedStateData.sbaTotal)}</span>
                           </div>
                         )}
                       </div>

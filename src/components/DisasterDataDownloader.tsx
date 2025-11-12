@@ -32,8 +32,8 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
   const [dateRange, setDateRange] = useState({
     startYear: 2015,
     startMonth: 1,
-    endYear: new Date().getFullYear(),
-    endMonth: new Date().getMonth() + 1,
+    endYear: 2025,
+    endMonth: 10,
   });
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
@@ -73,7 +73,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
     const loadData = async () => {
       try {
         const csvFile = useSBAData
-          ? '/data/disaster_dollar_database_with_sba_2025_11_11.csv'
+          ? '/data/disaster_dollar_database_with_sba_pa_fix_2025_11_12.csv'
           : '/data/disaster_dollar_database_2025_06_02.csv';
         const response = await fetch(csvFile);
         const text = await response.text();
@@ -488,7 +488,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                       />
                       <div>
                         <span className="text-sm font-medium">SBA Disaster Loans</span>
-                        <p className="text-xs text-gray-500 mt-1">Small Business Administration disaster loan approvals</p>
+                        <p className="text-xs text-gray-500 mt-1">Small Business Administration Approved Disaster Loan Amount</p>
                       </div>
                     </label>
                   )}
@@ -629,7 +629,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                       {selectedFundingTypes.includes('sba') && useSBAData && (
                         <div className="bg-white p-3 rounded-lg border border-[#E6E7E8] shadow-sm flex flex-col justify-between h-full">
                           <div>
-                            <h4 className="text-sm font-semibold text-[#003A63]">SBA Disaster Loan<br />Approvals Total</h4>
+                            <h4 className="text-sm font-semibold text-[#003A63]">SBA Approved Disaster<br />Loan Total</h4>
                             <p className="text-xl font-bold text-[#228B22] mt-1">{formatCurrency(totalSBA)}</p>
                           </div>
                           <div></div> {/* Empty div for consistent spacing */}
@@ -653,7 +653,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
           
           {/* Map Description */}
           <p className="text-sm text-gray-600 mb-4">
-            Explore the geographic distribution of disaster events and funding. Each point represents a disaster event, with size and color indicating funding amounts across the selected funding types.
+            Explore the geographic distribution of disaster events and funding. Color of states indicate funding amounts across the selected funding types and date range.
           </p>
           
           {/* Current Filters Readout */}
