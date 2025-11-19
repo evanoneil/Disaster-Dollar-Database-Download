@@ -116,12 +116,21 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
       
       // Handle territories as a special case
       let stateMatch = false;
-      if (selectedStates.length === 0) {
-        stateMatch = true; // No states selected means all states match
-      } else if (territories.includes(row.state) && includesTerritories) {
-        stateMatch = true; // Include territories if the territories option is selected
+      if (selectedStates.length === 0 && !includesTerritories) {
+        // No states selected and territories unchecked - show everything (all states + territories)
+        stateMatch = true;
+      } else if (selectedStates.length === 0 && includesTerritories) {
+        // No states selected but territories checked - show ONLY territories
+        stateMatch = territories.includes(row.state);
       } else {
-        stateMatch = selectedStates.includes(row.state); // Normal state matching
+        // Some states are selected
+        if (territories.includes(row.state)) {
+          // This is a territory - only include if includesTerritories is checked
+          stateMatch = includesTerritories;
+        } else {
+          // This is a state - include if it's in the selected list
+          stateMatch = selectedStates.includes(row.state);
+        }
       }
       
       const typeMatch = selectedDisasterTypes.length === 0 || selectedDisasterTypes.includes(row.incident_type);
@@ -500,13 +509,14 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
         
         {/* Timeline Chart - Moved below other filters */}
         {!loading && (
-          <TimeSeriesBrush 
+          <TimeSeriesBrush
             data={filteredData}
-            dateRange={dateRange} 
+            dateRange={dateRange}
             onDateRangeChange={setDateRange}
             showDateSelection={false}
             showChart={true}
             title="Disaster Funding Overview"
+            selectedFundingTypes={selectedFundingTypes}
             filterSummary={[
               {
                 label: "Date Range",
@@ -514,11 +524,11 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
               },
               {
                 label: "Locations",
-                value: selectedStates.length === 0 && !includesTerritories ? 'All states' : 
+                value: selectedStates.length === 0 && !includesTerritories ? 'All states' :
                   selectedStates.length === Object.keys(stateNames).length && includesTerritories ? 'All states & territories' :
                   selectedStates.length === 0 && includesTerritories ? 'U.S. Territories only' :
-                  selectedStates.length <= 3 ? 
-                    selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') + 
+                  selectedStates.length <= 3 ?
+                    selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') +
                     (includesTerritories ? ' + Territories' : '') :
                     `${selectedStates.length} states selected` + (includesTerritories ? ' + Territories' : '')
               },

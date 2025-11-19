@@ -35,6 +35,7 @@ interface TimeSeriesBrushProps {
     label: string;
     value: string;
   }>; // New prop for structured filter data
+  selectedFundingTypes?: string[]; // New prop for selected funding types
 }
 
 const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
@@ -45,7 +46,8 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
   showChart = true,
   title,
   description,
-  filterSummary
+  filterSummary,
+  selectedFundingTypes = []
 }) => {
   // State to track if data is ready to render
   const [isDataReady, setIsDataReady] = useState(false);
@@ -93,7 +95,7 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
 
     // Group data by month and sum funding
     const monthlyData = _.chain(data)
-      .filter(item => item.incident_start && (item.ihp_total || item.pa_total || item.cdbg_dr_allocation))
+      .filter(item => item.incident_start && (item.ihp_total || item.pa_total || item.cdbg_dr_allocation || item.sba_total_approved_loan_amount))
       .groupBy(item => {
         const date = new Date(item.incident_start);
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -101,18 +103,35 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
       .map((items, monthKey) => {
         const [year, month] = monthKey.split('-').map(Number);
         const date = new Date(year, month - 1, 1);
-        
-        // Sum up all funding types
-        const totalFunding = items.reduce((sum, item) => {
-          return sum + 
-            (Number(item.ihp_total) || 0) + 
-            (Number(item.pa_total) || 0) + 
-            (Number(item.cdbg_dr_allocation) || 0);
-        }, 0);
-        
+
+        // Calculate individual funding type totals
+        const ihpTotal = items.reduce((sum, item) => sum + (Number(item.ihp_total) || 0), 0);
+        const paTotal = items.reduce((sum, item) => sum + (Number(item.pa_total) || 0), 0);
+        const cdbgTotal = items.reduce((sum, item) => sum + (Number(item.cdbg_dr_allocation) || 0), 0);
+        const sbaTotal = items.reduce((sum, item) => sum + (Number(item.sba_total_approved_loan_amount) || 0), 0);
+
+        // Sum up only selected funding types for the total
+        let totalFunding = 0;
+        if (selectedFundingTypes.includes('ihp')) {
+          totalFunding += ihpTotal;
+        }
+        if (selectedFundingTypes.includes('pa')) {
+          totalFunding += paTotal;
+        }
+        if (selectedFundingTypes.includes('cdbg_dr_allocation')) {
+          totalFunding += cdbgTotal;
+        }
+        if (selectedFundingTypes.includes('sba_total_approved_loan_amount') || selectedFundingTypes.includes('sba')) {
+          totalFunding += sbaTotal;
+        }
+
         return {
           date: date.toISOString(),
           totalFunding,
+          ihp: ihpTotal,
+          pa: paTotal,
+          cdbg_dr: cdbgTotal,
+          sba: sbaTotal,
           count: items.length,
           year: year,
           month: month
@@ -122,7 +141,82 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
       .value();
 
     return monthlyData;
-  }, [data]);
+  }, [data, selectedFundingTypes]);
+
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+
+      // Format currency
+      const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0
+        }).format(value);
+      };
+
+      // Format the date
+      let formattedDate = 'Unknown date';
+      try {
+        formattedDate = format(parseISO(label as string), 'MMMM yyyy');
+      } catch (e) {
+        // Keep default value
+      }
+
+      return (
+        <div className="bg-white border-2 border-gray-300 rounded-lg shadow-lg p-3">
+          <p className="font-semibold text-gray-800 mb-2">{formattedDate}</p>
+          <div className="space-y-1">
+            {selectedFundingTypes.includes('ihp') && data.ihp > 0 && (
+              <div className="flex justify-between items-center gap-4">
+                <span className="text-sm flex items-center">
+                  <span className="inline-block w-3 h-3 rounded-full bg-[#2171b5] mr-2"></span>
+                  IHP:
+                </span>
+                <span className="text-sm font-medium">{formatCurrency(data.ihp)}</span>
+              </div>
+            )}
+            {selectedFundingTypes.includes('pa') && data.pa > 0 && (
+              <div className="flex justify-between items-center gap-4">
+                <span className="text-sm flex items-center">
+                  <span className="inline-block w-3 h-3 rounded-full bg-[#41B6E6] mr-2"></span>
+                  PA:
+                </span>
+                <span className="text-sm font-medium">{formatCurrency(data.pa)}</span>
+              </div>
+            )}
+            {selectedFundingTypes.includes('cdbg_dr_allocation') && data.cdbg_dr > 0 && (
+              <div className="flex justify-between items-center gap-4">
+                <span className="text-sm flex items-center">
+                  <span className="inline-block w-3 h-3 rounded-full bg-[#89684F] mr-2"></span>
+                  CDBG-DR:
+                </span>
+                <span className="text-sm font-medium">{formatCurrency(data.cdbg_dr)}</span>
+              </div>
+            )}
+            {(selectedFundingTypes.includes('sba_total_approved_loan_amount') || selectedFundingTypes.includes('sba')) && data.sba > 0 && (
+              <div className="flex justify-between items-center gap-4">
+                <span className="text-sm flex items-center">
+                  <span className="inline-block w-3 h-3 rounded-full bg-[#228B22] mr-2"></span>
+                  SBA:
+                </span>
+                <span className="text-sm font-medium">{formatCurrency(data.sba)}</span>
+              </div>
+            )}
+            <div className="pt-2 mt-2 border-t border-gray-200">
+              <div className="flex justify-between items-center gap-4">
+                <span className="text-sm font-semibold">Total:</span>
+                <span className="text-sm font-bold text-[#00A79D]">{formatCurrency(data.totalFunding)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   // Set data ready state when timeSeriesData is populated
   useEffect(() => {
@@ -267,13 +361,6 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
     }
   };
 
-  // Format tooltip labels
-  const formatTooltip = (value: number, name: string) => {
-    if (name === 'totalFunding') {
-      return [`$${value.toLocaleString()}`, 'Total Funding'];
-    }
-    return [value, name];
-  };
 
   // If data is not ready, show a loading state
   if (!isDataReady || timeSeriesData.length === 0) {
@@ -445,16 +532,7 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
                 width={70} // Wider for the dollar signs
                 fontSize={11} // Smaller font size
               />
-              <Tooltip 
-                formatter={formatTooltip}
-                labelFormatter={(label) => {
-                  try {
-                    return format(parseISO(label as string), 'MMMM yyyy');
-                  } catch (e) {
-                    return "Unknown date";
-                  }
-                }}
-              />
+              <Tooltip content={<CustomTooltip />} />
               <Bar 
                 dataKey="totalFunding" 
                 fill="url(#colorFunding)"
