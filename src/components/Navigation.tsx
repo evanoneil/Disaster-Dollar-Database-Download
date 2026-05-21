@@ -5,15 +5,15 @@ import { usePathname } from 'next/navigation';
 
 const Navigation = () => {
   const pathname = usePathname();
-  
+
   return (
     <nav className="max-w-6xl mx-auto mb-6 bg-white rounded-lg shadow-md">
       <div className="flex flex-col lg:flex-row">
-        <Link 
-          href="/" 
+        <Link
+          href="/"
           className={`py-4 px-6 text-[#003A63] font-medium hover:bg-gray-50 rounded-tl-lg rounded-tr-lg lg:rounded-tr-none lg:rounded-bl-lg text-left lg:flex-1 transition-all duration-200 ${
-            pathname === '/' 
-              ? 'bg-blue-50 border-2 border-blue-500 shadow-md' 
+            pathname === '/'
+              ? 'bg-blue-50 border-2 border-blue-500 shadow-md'
               : 'border-b lg:border-b-0 lg:border-r border-gray-200'
           }`}
         >
@@ -31,11 +31,11 @@ const Navigation = () => {
             </div>
           </div>
         </Link>
-        <Link 
-          href="/fact-sheet" 
+        <Link
+          href="/fact-sheet"
           className={`py-4 px-6 text-[#003A63] font-medium hover:bg-gray-50 rounded-bl-lg rounded-br-lg lg:rounded-bl-none lg:rounded-tr-lg text-left lg:flex-1 transition-all duration-200 ${
-            pathname === '/fact-sheet' 
-              ? 'bg-blue-50 border-2 border-blue-500 shadow-md' 
+            pathname === '/fact-sheet'
+              ? 'bg-blue-50 border-2 border-blue-500 shadow-md'
               : 'border-t lg:border-t-0 lg:border-l border-gray-200'
           }`}
         >
@@ -58,4 +58,4 @@ const Navigation = () => {
   );
 };
 
-export default Navigation; 
+export default Navigation;

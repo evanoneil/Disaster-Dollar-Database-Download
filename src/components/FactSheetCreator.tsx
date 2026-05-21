@@ -20,8 +20,17 @@ interface DisasterData {
   declaration_url: string;
   year: number | null;
   ihp_applicants?: number;
+  common_name_1?: string;
+  common_name_2?: string;
+  common_name_3?: string;
+  tribal_request?: boolean | string;
   // ... add other fields as needed
 }
+
+const validName = (v: string | undefined | null): string | undefined => {
+  if (!v || v === 'NA' || v === '0' || v.trim() === '') return undefined;
+  return v;
+};
 
 interface FactSheetCreatorProps {
   useSBAData?: boolean;
@@ -35,6 +44,8 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
   const [searchResults, setSearchResults] = useState<DisasterData[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [selectedResult, setSelectedResult] = useState<DisasterData | null>(null);
+  const [stateFilter, setStateFilter] = useState('');
+  const [tribalOnly, setTribalOnly] = useState(false);
 
   // State and territory mappings
   const stateNames = {
@@ -156,33 +167,49 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
   // Handle search submission
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (searchQuery.trim() === '') {
+
+    const hasQuery = searchQuery.trim() !== '';
+    const hasFilters = stateFilter !== '' || tribalOnly;
+
+    if (!hasQuery && !hasFilters) {
       setSearchResults([]);
       setShowResults(false);
       setSelectedResult(null);
       return;
     }
-    
+
     const query = searchQuery.toLowerCase();
-    
-    // Search through the data for matching events
-    const results = data.filter(item => {
-      return (
+
+    // Search through the data for matching events (including common names)
+    let results = data.filter(item => {
+      // Apply text search (if query provided)
+      const matchesQuery = !hasQuery || (
         (item.event && item.event.toLowerCase().includes(query)) ||
         (item.incident_type && item.incident_type.toLowerCase().includes(query)) ||
         (item.state && item.state.toLowerCase().includes(query)) ||
-        (item.incident_number && item.incident_number.toString().includes(query))
+        (item.incident_number && item.incident_number.toString().includes(query)) ||
+        (validName(item.common_name_1) && validName(item.common_name_1)!.toLowerCase().includes(query)) ||
+        (validName(item.common_name_2) && validName(item.common_name_2)!.toLowerCase().includes(query)) ||
+        (validName(item.common_name_3) && validName(item.common_name_3)!.toLowerCase().includes(query))
       );
+
+      // Apply state filter
+      const matchesState = !stateFilter || item.state === stateFilter;
+
+      // Apply tribal filter
+      const matchesTribal = !tribalOnly ||
+        item.tribal_request === true || item.tribal_request === 'TRUE';
+
+      return matchesQuery && matchesState && matchesTribal;
     });
-    
+
     // Sort results by date (most recent first)
     const sortedResults = [...results].sort((a, b) => {
       const dateA = a.incident_start ? new Date(a.incident_start).getTime() : 0;
       const dateB = b.incident_start ? new Date(b.incident_start).getTime() : 0;
       return dateB - dateA;
     });
-    
+
     setSearchResults(sortedResults);
     setSelectedResult(null);
     setShowResults(true);
@@ -221,22 +248,64 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
         </p>
       </div>
 
-      {/* Search bar */}
+      {/* Search bar and filters */}
       <div className="mb-8">
-        <form onSubmit={handleSearch} className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            placeholder="Search by event name, incident type, state, or disaster number..."
-            className="w-full p-4 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003A63]"
-          />
-          <button
-            type="submit"
-            className="absolute right-4 top-4 text-[#003A63]"
-          >
-            <Search size={20} />
-          </button>
+        <form onSubmit={handleSearch}>
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              placeholder="Search by event name, common name (e.g. Hurricane Katrina), or disaster number..."
+              className="w-full p-4 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003A63]"
+            />
+            <button
+              type="submit"
+              className="absolute right-4 top-4 text-[#003A63]"
+            >
+              <Search size={20} />
+            </button>
+          </div>
+
+          {/* Filters row */}
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-[#89684F]" />
+              <select
+                value={stateFilter}
+                onChange={(e) => setStateFilter(e.target.value)}
+                className="border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003A63]"
+              >
+                <option value="">All States &amp; Territories</option>
+                {Object.entries(stateNames)
+                  .sort(([, a], [, b]) => a.localeCompare(b))
+                  .map(([abbr, name]) => (
+                    <option key={abbr} value={abbr}>{name}</option>
+                  ))
+                }
+              </select>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={tribalOnly}
+                onChange={(e) => setTribalOnly(e.target.checked)}
+                className="w-4 h-4 accent-[#003A63]"
+              />
+              <span className="text-[#003A63] font-medium">Tribal Areas only</span>
+            </label>
+
+            {(stateFilter || tribalOnly) && (
+              <button
+                type="button"
+                onClick={() => { setStateFilter(''); setTribalOnly(false); }}
+                className="text-xs text-gray-500 underline hover:text-gray-700"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
         </form>
         
         {/* Search results with radio buttons */}
@@ -280,11 +349,21 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
                       </div>
                       <div className="flex-1">
                         <div className="font-medium text-[#003A63]">
-                          {event.event || 'Unnamed Event'} {event.incident_number && `(#${event.incident_number})`}
+                          {validName(event.common_name_1) || event.event || 'Unnamed Event'} {event.incident_number && `(#${event.incident_number})`}
                         </div>
+                        {validName(event.common_name_1) && (
+                          <div className="text-xs text-gray-500 italic">
+                            {event.event}
+                          </div>
+                        )}
                         <div className="text-sm text-gray-600 flex justify-between">
                           <span>{event.incident_type}</span>
-                          <span>{getStateName(event.state)}</span>
+                          <span>
+                            {getStateName(event.state)}
+                            {(event.tribal_request === true || event.tribal_request === 'TRUE') && (
+                              <span className="ml-2 inline-block text-xs bg-[#003A63] text-white px-1.5 py-0.5 rounded">Tribal</span>
+                            )}
+                          </span>
                           <span>{formatDate(event.incident_start)}</span>
                         </div>
                       </div>
@@ -321,8 +400,8 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
             Search for a disaster to get started
           </h3>
           <p className="text-gray-600">
-            Enter a disaster name, state, or incident number in the search bar above to find specific events.
-            <br />You can search for terms like "Hurricane Ian", "Texas", "Florida", or a specific FEMA incident number.
+            Enter a disaster name, common name, state, or incident number in the search bar above to find specific events.
+            <br />You can search for terms like &quot;Hurricane Katrina&quot;, &quot;Camp Fire&quot;, &quot;Texas&quot;, or a specific FEMA incident number.
           </p>
         </div>
       )}

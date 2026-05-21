@@ -793,7 +793,7 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
     const loadCongressionalData = async () => {
       try {
         setCongressionalDataLoading(true);
-        const response = await fetch('/data/ihp_funding_by_cd_2023_districts_2021_onwards.csv');
+        const response = await fetch('/data/ihp_by_cd_full.csv');
         const text = await response.text();
         
         Papa.parse(text, {
@@ -1318,8 +1318,8 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
                       <span className={`px-2 py-1 text-xs font-medium rounded ${
                         district.party === 'Republican' 
                           ? 'bg-red-100 text-red-800' 
-                          : district.party === 'Democratic' 
-                            ? 'bg-blue-100 text-blue-800' 
+                          : (district.party === 'Democratic' || district.party === 'Democrat')
+                            ? 'bg-blue-100 text-blue-800'
                             : 'bg-gray-100 text-gray-800'
                       }`}>
                         {district.party || 'Unknown'}

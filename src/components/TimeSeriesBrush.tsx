@@ -382,7 +382,7 @@ const TimeSeriesBrush: React.FC<TimeSeriesBrushProps> = ({
       {/* Header and Data Info */}
       <div className="mb-4">
         <div className="flex justify-between items-center mb-2">
-          <h2 className="text-lg font-semibold text-[#003A63]">{title || "Filter Disaster Data"}</h2>
+          {(title === undefined ? "Filter Disaster Data" : title) && <h2 className="text-lg font-semibold text-[#003A63]">{title === undefined ? "Filter Disaster Data" : title}</h2>}
         </div>
         
         {/* Data Availability Information */}

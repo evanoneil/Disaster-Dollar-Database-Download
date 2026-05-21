@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import _ from 'lodash';
-import { Download } from 'lucide-react';
+import { Download, ChevronDown } from 'lucide-react';
 import TimeSeriesBrush from './TimeSeriesBrush';
 import DisasterMap from './DisasterMap';
 
@@ -68,6 +68,8 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
   // Known territories for grouping
   const territories = ['PR', 'GU', 'VI', 'MP', 'AS', 'FM', 'MH', 'PW'];
   const [includesTerritories, setIncludesTerritories] = useState(false);
+  const [tribalOnly, setTribalOnly] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -100,6 +102,20 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
       setSelectedDisasterTypes(uniqueDisasterTypes);
     }
   }, [loading, data]);
+
+  // Compute data range info for subtitle
+  const dataRangeInfo = useMemo(() => {
+    if (loading || data.length === 0) return null;
+    const dates = data
+      .filter(item => item.incident_start)
+      .map(item => new Date(item.incident_start))
+      .sort((a, b) => a.getTime() - b.getTime());
+    if (dates.length === 0) return null;
+    const earliest = dates[0];
+    const latest = dates[dates.length - 1];
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return { earliest: fmt(earliest), latest: fmt(latest), total: data.length };
+  }, [data, loading]);
 
   // Memoize the filtered data based on filters
   const filteredData = useMemo(() => {
@@ -166,13 +182,17 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
         }
       }
 
-      return dateMatch && stateMatch && typeMatch && fundingMatch;
+      // Apply tribal filter
+      const tribalMatch = !tribalOnly ||
+        (row as any).tribal_request === true || (row as any).tribal_request === 'TRUE';
+
+      return dateMatch && stateMatch && typeMatch && fundingMatch && tribalMatch;
     });
-  }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes, data, loading, includesTerritories, territories]);
+  }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes, data, loading, includesTerritories, territories, tribalOnly]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes]);
+  }, [dateRange, selectedStates, selectedDisasterTypes, selectedFundingTypes, tribalOnly]);
 
   const handleDownload = () => {
     // Check if there's any data to download
@@ -260,26 +280,51 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-2 text-[#003A63]">Disaster Dollar Database Data Download Delivery Device</h1>
+        <h1 className="text-2xl font-bold mb-2 text-[#003A63]">Explore the Disaster Dollar Database</h1>
         <p className="text-[#89684F]">
           Filter and download disaster assistance data by date range, location, and disaster type.
         </p>
+        {dataRangeInfo && (
+          <p className="text-sm text-gray-600 mt-2">
+            Disaster data is available from{' '}
+            <span className="font-medium">{dataRangeInfo.earliest}</span> to{' '}
+            <span className="font-medium">{dataRangeInfo.latest}</span>.{' '}
+            The database contains{' '}
+            <span className="font-medium">{dataRangeInfo.total.toLocaleString()}</span>{' '}
+            disaster records.
+          </p>
+        )}
       </div>
 
       <div className="space-y-6">
-        {/* Time Series Date Selection Only */}
-        {!loading && (
-          <TimeSeriesBrush 
-            data={data} 
-            dateRange={dateRange} 
-            onDateRangeChange={setDateRange}
-            showDateSelection={true}
-            showChart={false}
-          />
-        )}
-        
-        {/* Filter Sections - Moved right below TimeSeriesBrush */}
-        <div className="flex flex-col md:flex-row md:space-x-4">
+        {/* Accordion: Filter Disaster Data */}
+        <div className="border rounded-lg overflow-hidden">
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+          >
+            <span className="text-lg font-semibold text-[#003A63]">Filter Disaster Data</span>
+            <ChevronDown
+              size={20}
+              className={`text-[#003A63] transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {filtersOpen && (
+            <div className="p-4 space-y-6 border-t">
+              {/* Time Series Date Selection Only */}
+              {!loading && (
+                <TimeSeriesBrush
+                  data={data}
+                  dateRange={dateRange}
+                  onDateRangeChange={setDateRange}
+                  showDateSelection={true}
+                  showChart={false}
+                />
+              )}
+
+              {/* Filter Sections */}
+              <div className="flex flex-col md:flex-row md:space-x-4">
           {/* Location Selection */}
           <div className="md:w-1/3 mb-6 md:mb-0">
             <div className={`border rounded-lg ${useSBAData ? 'h-[400px]' : 'h-[320px]'} flex flex-col`}>
@@ -300,6 +345,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                     onClick={() => {
                       setSelectedStates([]);
                       setIncludesTerritories(false);
+                      setTribalOnly(false);
                     }}
                     className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
                   >
@@ -342,6 +388,17 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                       className="rounded border-gray-300"
                     />
                     <span className="text-sm font-medium">U.S. Territories</span>
+                  </label>
+                  <label className="flex items-center space-x-2 bg-gray-100 p-1 rounded">
+                    <input
+                      type="checkbox"
+                      checked={tribalOnly}
+                      onChange={(e) => {
+                        setTribalOnly(e.target.checked);
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm font-medium">Tribal Areas</span>
                   </label>
                 </div>
                 {/* Bottom fade gradient to indicate more content */}
@@ -505,74 +562,28 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
               </div>
             </div>
           </div>
+              </div>
+            </div>
+          )}
         </div>
-        
-        {/* Timeline Chart - Moved below other filters */}
-        {!loading && (
-          <TimeSeriesBrush
-            data={filteredData}
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
-            showDateSelection={false}
-            showChart={true}
-            title="Disaster Funding Overview"
-            selectedFundingTypes={selectedFundingTypes}
-            filterSummary={[
-              {
-                label: "Date Range",
-                value: `${months[dateRange.startMonth - 1]} ${dateRange.startYear} - ${months[dateRange.endMonth - 1]} ${dateRange.endYear}`
-              },
-              {
-                label: "Locations",
-                value: selectedStates.length === 0 && !includesTerritories ? 'All states' :
-                  selectedStates.length === Object.keys(stateNames).length && includesTerritories ? 'All states & territories' :
-                  selectedStates.length === 0 && includesTerritories ? 'U.S. Territories only' :
-                  selectedStates.length <= 3 ?
-                    selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') +
-                    (includesTerritories ? ' + Territories' : '') :
-                    `${selectedStates.length} states selected` + (includesTerritories ? ' + Territories' : '')
-              },
-              {
-                label: "Disaster Types",
-                value: selectedDisasterTypes.length === 0 ? 'All types' :
-                  selectedDisasterTypes.length <= 2 ? selectedDisasterTypes.join(', ') :
-                  `${selectedDisasterTypes.length} types selected`
-              },
-              {
-                label: "Funding Types",
-                value: selectedFundingTypes.length === 0 ? 'None selected' :
-                  selectedFundingTypes.length === (useSBAData ? 4 : 3) ? 'All funding types' :
-                  selectedFundingTypes.map(type => {
-                    switch(type) {
-                      case 'ihp': return 'IHP';
-                      case 'pa': return 'PA';
-                      case 'cdbg_dr_allocation': return 'CDBG-DR';
-                      case 'sba': return 'SBA';
-                      default: return type;
-                    }
-                  }).join(', ')
-              }
-            ]}
-          />
-        )}
-        
-        {/* Total Funding Summary */}
+
+        {/* Funding Overview */}
         <div className="mb-6">
           <div className="bg-[#f8fafc] border border-[#E6E7E8] rounded-lg p-4">
             {(() => {
               // Calculate totals for all funding types
               const totalIHP = filteredData.reduce((sum, item) => {
-                const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total : 
+                const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total :
                             (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
                 return sum + (selectedFundingTypes.includes('ihp') ? ihpTotal : 0);
               }, 0);
-              
+
               const totalPA = filteredData.reduce((sum, item) => {
-                const paTotal = typeof item.pa_total === 'number' ? item.pa_total : 
+                const paTotal = typeof item.pa_total === 'number' ? item.pa_total :
                            (typeof item.pa_total === 'string' ? parseFloat(item.pa_total) || 0 : 0);
                 return sum + (selectedFundingTypes.includes('pa') ? paTotal : 0);
               }, 0);
-              
+
               const totalCDBG = filteredData.reduce((sum, item) => {
                 const cdbgTotal = typeof item.cdbg_dr_allocation === 'number' ? item.cdbg_dr_allocation :
                                (typeof item.cdbg_dr_allocation === 'string' ? parseFloat(item.cdbg_dr_allocation) || 0 : 0);
@@ -586,7 +597,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
               }, 0);
 
               const grandTotal = totalIHP + totalPA + totalCDBG + totalSBA;
-              
+
               // Helper function to format currency
               const formatCurrency = (amount: number): string => {
                 return new Intl.NumberFormat('en-US', {
@@ -612,7 +623,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                             <h4 className="text-sm font-semibold text-[#003A63]">Individual & Household<br />Program Total</h4>
                             <p className="text-xl font-bold text-[#2171b5] mt-1">{formatCurrency(totalIHP)}</p>
                           </div>
-                          <div></div> {/* Empty div for consistent spacing */}
+                          <div></div>
                         </div>
                       )}
 
@@ -622,7 +633,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                             <h4 className="text-sm font-semibold text-[#003A63]">Public<br />Assistance Total</h4>
                             <p className="text-xl font-bold text-[#41B6E6] mt-1">{formatCurrency(totalPA)}</p>
                           </div>
-                          <div></div> {/* Empty div for consistent spacing */}
+                          <div></div>
                         </div>
                       )}
 
@@ -632,7 +643,7 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                             <h4 className="text-sm font-semibold text-[#003A63]">CDBG-DR<br />Allocation Total</h4>
                             <p className="text-xl font-bold text-[#89684F] mt-1">{formatCurrency(totalCDBG)}</p>
                           </div>
-                          <div></div> {/* Empty div for consistent spacing */}
+                          <div></div>
                         </div>
                       )}
 
@@ -642,14 +653,13 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                             <h4 className="text-sm font-semibold text-[#003A63]">SBA Approved Disaster<br />Loan Total</h4>
                             <p className="text-xl font-bold text-[#228B22] mt-1">{formatCurrency(totalSBA)}</p>
                           </div>
-                          <div></div> {/* Empty div for consistent spacing */}
+                          <div></div>
                         </div>
                       )}
                   </div>
                 </div>
               );
-              
-              // Helper function to format large numbers with commas
+
               function formatNumber(num: number): string {
                 return new Intl.NumberFormat('en-US').format(num);
               }
@@ -657,54 +667,41 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
           </div>
         </div>
 
-        {/* Map Section */}
+        {/* Funding Distribution: Chart + Map */}
         <div>
-          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Disaster Map</h2>
-          
-          {/* Map Description */}
-          <p className="text-sm text-gray-600 mb-4">
-            Explore the geographic distribution of disaster events and funding. Color of states indicate funding amounts across the selected funding types and date range.
-          </p>
-          
+          <h2 className="text-lg font-semibold mb-4 text-[#003A63]">Funding Distribution</h2>
+
           {/* Current Filters Readout */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-2">Current Filters Applied</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-              {/* Date Range */}
               <div>
                 <span className="font-medium text-gray-600">Date Range:</span>
                 <p className="text-gray-800">
                   {months[dateRange.startMonth - 1]} {dateRange.startYear} - {months[dateRange.endMonth - 1]} {dateRange.endYear}
                 </p>
               </div>
-              
-              {/* Locations */}
               <div>
                 <span className="font-medium text-gray-600">Locations:</span>
                 <p className="text-gray-800">
-                  {selectedStates.length === 0 && !includesTerritories ? 'All states' : 
+                  {selectedStates.length === 0 && !includesTerritories ? 'All states' :
                    selectedStates.length === Object.keys(stateNames).length && includesTerritories ? 'All states & territories' :
                    selectedStates.length === 0 && includesTerritories ? 'U.S. Territories only' :
-                   selectedStates.length <= 3 ? 
-                     selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') + 
+                   selectedStates.length <= 3 ?
+                     selectedStates.map(abbr => stateNames[abbr as keyof typeof stateNames]).join(', ') +
                      (includesTerritories ? ' + Territories' : '') :
-                     `${selectedStates.length} states selected` + (includesTerritories ? ' + Territories' : '')
-                  }
+                     `${selectedStates.length} states selected` + (includesTerritories ? ' + Territories' : '')}
+                  {tribalOnly ? ' (Tribal Areas only)' : ''}
                 </p>
               </div>
-              
-              {/* Disaster Types */}
               <div>
                 <span className="font-medium text-gray-600">Disaster Types:</span>
                 <p className="text-gray-800">
                   {selectedDisasterTypes.length === 0 ? 'All types' :
                    selectedDisasterTypes.length <= 2 ? selectedDisasterTypes.join(', ') :
-                   `${selectedDisasterTypes.length} types selected`
-                  }
+                   `${selectedDisasterTypes.length} types selected`}
                 </p>
               </div>
-              
-              {/* Funding Types */}
               <div>
                 <span className="font-medium text-gray-600">Funding Types:</span>
                 <p className="text-gray-800">
@@ -718,18 +715,33 @@ const DisasterDataDownloader: React.FC<DisasterDataDownloaderProps> = ({ useSBAD
                        case 'sba': return 'SBA';
                        default: return type;
                      }
-                   }).join(', ')
-                  }
+                   }).join(', ')}
                 </p>
               </div>
             </div>
           </div>
-          
-          <DisasterMap 
-            filteredData={filteredData} 
-            stateNames={stateNames} 
-            selectedFundingTypes={selectedFundingTypes}
-          />
+
+          {/* Timeline Chart */}
+          {!loading && (
+            <TimeSeriesBrush
+              data={filteredData}
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              showDateSelection={false}
+              showChart={true}
+              title=""
+              selectedFundingTypes={selectedFundingTypes}
+            />
+          )}
+
+          {/* Map */}
+          <div className="mt-4">
+            <DisasterMap
+              filteredData={filteredData}
+              stateNames={stateNames}
+              selectedFundingTypes={selectedFundingTypes}
+            />
+          </div>
         </div>
 
         {/* Download Section */}
