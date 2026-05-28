@@ -8,6 +8,7 @@ import FundingBreakdownChart from './FundingBreakdownChart';
 
 interface DisasterData {
   incident_start: string;
+  incident_end?: string;
   incident_type: string;
   state: string;
   event: string;
@@ -54,6 +55,19 @@ const formatNumber = (num: number) => {
 const formatDateLong = (s: string) => {
   if (!s) return 'N/A';
   return format(new Date(s), 'MMMM d, yyyy');
+};
+
+const formatIncidentRange = (start?: string, end?: string) => {
+  if (!start) return '';
+  const startDate = new Date(start);
+  if (isNaN(startDate.getTime())) return '';
+  if (!end) return format(startDate, 'MMM d, yyyy');
+  const endDate = new Date(end);
+  if (isNaN(endDate.getTime())) return format(startDate, 'MMM d, yyyy');
+  const sameYear = startDate.getFullYear() === endDate.getFullYear();
+  return sameYear
+    ? `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d, yyyy')}`
+    : `${format(startDate, 'MMM d, yyyy')} – ${format(endDate, 'MMM d, yyyy')}`;
 };
 
 const DisasterLookupDisplay: React.FC<DisasterLookupDisplayProps> = ({
@@ -187,7 +201,7 @@ const DisasterLookupDisplay: React.FC<DisasterLookupDisplayProps> = ({
   return (
     <section
       ref={lookupRef}
-      className="relative bg-white border border-[#E6E7E8] rounded-lg overflow-hidden"
+      className="relative bg-white border border-[#E6E7E8] rounded-b-lg overflow-hidden"
     >
       {/* Top gradient accent */}
       <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-[#003A63] via-[#00A79D] to-[#89684F]" />
@@ -208,6 +222,9 @@ const DisasterLookupDisplay: React.FC<DisasterLookupDisplayProps> = ({
           </h2>
           <div className="mt-2 text-sm text-[#89684F]">
             {stateName} · Declaration {formatDateLong(primaryEvent.declaration_date || primaryEvent.incident_start)}
+            {formatIncidentRange(primaryEvent.incident_start, primaryEvent.incident_end) && (
+              <> · Incident {formatIncidentRange(primaryEvent.incident_start, primaryEvent.incident_end)}</>
+            )}
           </div>
         </div>
 
@@ -244,26 +261,26 @@ const DisasterLookupDisplay: React.FC<DisasterLookupDisplayProps> = ({
           </div>
 
           <div className={`grid grid-cols-2 ${useSBAData ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3 mb-6`}>
-            <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-4 hover:border-[#2171b5]/30 transition-colors">
+            <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-4 hover:border-[#2171b5]/30 transition-colors">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-[#2171b5]" />
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#003A63] font-semibold mb-1">IHP</div>
               <div className="text-xl font-black text-[#2171b5] tabular-nums leading-tight">{formatCurrency(totalIHP)}</div>
               <div className="text-[11px] text-[#003A63] mt-1">Individual &amp; Household Program</div>
             </div>
-            <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-4 hover:border-[#41B6E6]/30 transition-colors">
+            <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-4 hover:border-[#41B6E6]/30 transition-colors">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-[#41B6E6]" />
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#003A63] font-semibold mb-1">PA</div>
               <div className="text-xl font-black text-[#41B6E6] tabular-nums leading-tight">{formatCurrency(totalPA)}</div>
               <div className="text-[11px] text-[#003A63] mt-1">Public Assistance</div>
             </div>
-            <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-4 hover:border-[#89684F]/30 transition-colors">
+            <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-4 hover:border-[#89684F]/30 transition-colors">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-[#89684F]" />
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#003A63] font-semibold mb-1">CDBG-DR</div>
               <div className="text-xl font-black text-[#89684F] tabular-nums leading-tight">{formatCurrency(totalCDBG)}</div>
               <div className="text-[11px] text-[#003A63] mt-1">Community Development Block Grant</div>
             </div>
             {useSBAData && (
-              <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-4 hover:border-[#228B22]/30 transition-colors">
+              <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-4 hover:border-[#228B22]/30 transition-colors">
                 <div className="absolute top-0 left-0 w-full h-[3px] bg-[#228B22]" />
                 <div className="text-[11px] uppercase tracking-[0.12em] text-[#003A63] font-semibold mb-1">SBA</div>
                 <div className="text-xl font-black text-[#228B22] tabular-nums leading-tight">{formatCurrency(totalSBA)}</div>
@@ -285,8 +302,8 @@ const DisasterLookupDisplay: React.FC<DisasterLookupDisplayProps> = ({
       )}
 
       <div className="px-6 sm:px-8 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-5 hover:border-[#00A79D]/40 transition-colors">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-5 hover:border-[#00A79D]/40 transition-colors">
             <div className="absolute top-0 left-0 w-full h-[3px] bg-[#00A79D]" />
             <div className="text-[11px] uppercase tracking-[0.12em] text-[#89684F] font-semibold mb-1">
               Average assistance to households
@@ -299,7 +316,7 @@ const DisasterLookupDisplay: React.FC<DisasterLookupDisplayProps> = ({
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-5 hover:border-[#00A79D]/40 transition-colors">
+          <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-5 hover:border-[#00A79D]/40 transition-colors">
             <div className="absolute top-0 left-0 w-full h-[3px] bg-[#00A79D]" />
             <div className="text-[11px] uppercase tracking-[0.12em] text-[#89684F] font-semibold mb-1">
               Total applicants
@@ -312,18 +329,6 @@ const DisasterLookupDisplay: React.FC<DisasterLookupDisplayProps> = ({
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-5 hover:border-[#00A79D]/40 transition-colors">
-            <div className="absolute top-0 left-0 w-full h-[3px] bg-[#00A79D]" />
-            <div className="text-[11px] uppercase tracking-[0.12em] text-[#89684F] font-semibold mb-1">
-              Similar disasters in past 5 years
-            </div>
-            <div className="text-3xl font-black text-[#003A63] tabular-nums leading-tight">
-              {formatNumber(eventStats.similarDisastersCount)}
-            </div>
-            <div className="text-[11px] text-[#89684F] mt-1">
-              Nationwide, same incident type
-            </div>
-          </div>
         </div>
       </div>
     </section>

@@ -205,19 +205,8 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
 
   return (
     <div className="max-w-7xl mx-auto px-6 pb-16">
-      {/* Header */}
-      <section className="pt-8 pb-8">
-        <h1 className="text-[2.5rem] leading-[1.1] font-black text-[#003A63] tracking-tight">
-          Disaster Lookup
-        </h1>
-        <p className="mt-3 text-[#89684F] text-base max-w-xl leading-relaxed">
-          Look up a single disaster to see its federal funding summary at a glance.
-          Search by name, state, or FEMA disaster number.
-        </p>
-      </section>
-
       {/* Picker */}
-      <section className="mb-8">
+      <section className="pt-8 mb-8">
         <div className="relative max-w-4xl">
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">

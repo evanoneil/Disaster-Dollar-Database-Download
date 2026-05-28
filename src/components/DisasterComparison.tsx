@@ -163,7 +163,11 @@ const DisasterComparison: React.FC<Props> = ({ useSBAData = true }) => {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return disasters.filter(d => {
-      if (typeFilter !== 'ALL' && d.incident_type !== typeFilter) return false;
+      if (typeFilter !== 'ALL') {
+        const ev = (d.event || '').toLowerCase();
+        const tf = typeFilter.toLowerCase();
+        if (d.incident_type !== typeFilter && !ev.includes(tf)) return false;
+      }
       if (!q) return true;
       const hay = [
         displayName(d),
@@ -213,16 +217,7 @@ const DisasterComparison: React.FC<Props> = ({ useSBAData = true }) => {
     <div className="max-w-7xl mx-auto px-6 pb-16">
       {/* ─── Header ─────────────────────────────────────────────────── */}
       <section className="pt-8 pb-8">
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-          <div>
-            <h1 className="text-[2.5rem] leading-[1.1] font-black text-[#003A63] tracking-tight">
-              Compare Disasters
-            </h1>
-            <p className="mt-3 text-[#89684F] text-base max-w-xl leading-relaxed">
-              Select {MIN_SELECTED}–{MAX_SELECTED} disasters to compare federal funding side-by-side.
-              Search by name or state, or narrow the list by disaster type.
-            </p>
-          </div>
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-end gap-4">
           <div className="flex items-center gap-6 text-right">
             <div>
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#89684F] font-semibold">Selected</div>
@@ -373,7 +368,7 @@ const DisasterComparison: React.FC<Props> = ({ useSBAData = true }) => {
               return (
                 <div
                   key={d.incident_number}
-                  className="relative bg-white border border-[#E6E7E8] rounded-lg overflow-hidden hover:border-[#00A79D]/40 transition-colors"
+                  className="relative bg-white border border-[#E6E7E8] rounded-b-lg overflow-hidden hover:border-[#00A79D]/40 transition-colors"
                 >
                   {/* Top accent */}
                   <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-[#003A63] via-[#00A79D] to-[#89684F]" />

@@ -48,8 +48,24 @@ suppressPackageStartupMessages({
 DDD_CSV       <- "public/data/disaster_dollar_database_with_sba_pa_fix_2025_11_12.csv"
 EVENTS_CSV    <- "public/data/Big Storms and FEMA Codes - Events.csv"
 REVIEW_CSV    <- "public/data/common_names_review.csv"
+TORNADO_REVIEW_CSV <- "public/data/tornado_names_review.csv"
+# Raw GDELT titles per event are cached here so extraction/stopwords can be
+# re-tuned offline (via rebuild_tornado_review.R) without re-querying GDELT.
+TORNADO_TITLES_CACHE <- "public/data/tornado_titles_cache.rds"
+TORNADO_TOP_N <- 12   # candidates to surface per event in the review CSV
 
-GDELT_V2_START <- as.Date("2015-02-18")  # GDELT 2.0 DOC API coverage start
+# Tornado mode (--tornado): focus exclusively on tornado common names.
+# Scope is Tornado + Severe Storm declarations (big tornado outbreaks are often
+# filed as "Severe Storm"), GDELT-only (FEMA titles never carry colloquial
+# tornado names), forces tornado keywords/patterns, and only assigns a name when
+# >=2 distinct articles agree. Writes review rows to TORNADO_REVIEW_CSV.
+TORNADO_SCOPE_TYPES <- c("Tornado", "Severe Storm")
+TORNADO_MIN_FREQ    <- 2
+
+GDELT_V2_START <- as.Date("2015-02-18")  # GDELT 2.0 GKG/event coverage start
+# The GDELT 2.0 *DOC* (article search) API only indexes articles from
+# 2017-01-01 onward — querying earlier dates returns "Invalid query start date".
+GDELT_DOC_START <- as.Date("2017-01-01")
 GDELT_DELAY    <- 5.5                     # GDELT enforces ~1 req / 5 sec
 GDELT_MAX      <- 100                     # articles per query
 POST_EVENT_DAYS <- 30                     # extend query window N days past incident_end
@@ -60,6 +76,7 @@ args <- commandArgs(trailingOnly = TRUE)
 DRY_RUN <- "--dry-run" %in% args
 POST_GDELT_ONLY <- "--post-gdelt" %in% args
 PRE_GDELT_ONLY  <- "--pre-gdelt"  %in% args
+TORNADO_MODE    <- "--tornado"    %in% args
 LIMIT <- if ("--limit" %in% args) {
   as.integer(args[which(args == "--limit") + 1])
 } else {
@@ -196,6 +213,202 @@ NAME_STOPWORDS <- c(
   # State names/abbrevs should be dropped too
   STATE_NAMES, names(STATE_NAMES)
 )
+
+# --- Tornado mode: keywords, patterns, extractor -----------------------------
+# Tornadoes have no canonical names; media identifies them by hardest-hit place
+# ("Joplin Tornado", "Mayfield Tornado"), named outbreak ("Super Outbreak",
+# "Quad-State Tornado"), or date ("December 2021 Tornado Outbreak"). We harvest
+# all of these forms from article titles and let frequency pick the winner.
+
+TORNADO_KEYWORDS <- c("tornado", "tornadoes", "\"tornado outbreak\"")
+
+TORNADO_MONTHS <- "January|February|March|April|May|June|July|August|September|October|November|December"
+
+# High-signal SPECIAL forms — named outbreaks and date-based outbreaks. These
+# are captured verbatim wherever they appear.
+TORNADO_SPECIAL_PATTERNS <- c(
+  "\\b(Super\\s+Outbreak)\\b",
+  "\\b(Quad-?State)\\b",
+  "\\b(Tri-?State)\\b",
+  sprintf("\\b((?:%s)\\s+\\d{4})\\s+[Tt]ornado", TORNADO_MONTHS),
+  "\\b(\\d{4})\\s+[Tt]ornado\\s+[Oo]utbreak\\b"
+)
+
+# PLACE detection does NOT rely on adjacency to "tornado": in real headlines the
+# hardest-hit town ("Mayfield", "Joplin") is the most-repeated proper noun in
+# the coverage, but is usually phrased as "tornado in Mayfield", "Mayfield
+# candle factory", "Mayfield, Kentucky" — rarely "Mayfield tornado". So we count
+# the frequency of every 1-2 word proper noun across all titles and let the most
+# common (non-stopword, non-state) one win.
+TORNADO_NOUN_PATTERN <- "\\b([A-Z][a-z]{2,}(?:[- ][A-Z][a-z]{2,})?)\\b"
+
+# Descriptors / adjectives that sit next to "tornado" but aren't place names.
+TORNADO_DESC_STOPWORDS <- c(
+  # size / severity adjectives
+  "Deadly", "Deadliest", "Massive", "Major", "Minor", "Huge", "Large",
+  "Largest", "Biggest", "Powerful", "Violent", "Monster", "Monstrous",
+  "Catastrophic", "Devastating", "Destructive", "Dangerous", "Strong",
+  "Strongest", "Brief", "Weak", "Killer", "Giant", "Terrible", "Horrific",
+  "Significant", "Intense", "Extreme", "Freak", "Sudden", "Worst", "Tragic",
+  "Incredible", "Unprecedented", "Historic", "Rare", "Surprise",
+  # certainty / count words
+  "Possible", "Confirmed", "Reported", "Suspected", "Likely", "Apparent",
+  "Another", "First", "Second", "Third", "Last", "Next", "Same", "One",
+  "Two", "Three", "Multiple", "Numerous", "Several", "Recent", "Latest",
+  # time words
+  "Night", "Morning", "Afternoon", "Evening", "Today", "Yesterday",
+  "Overnight", "Early", "Late", "Long", "Daytime", "Nighttime",
+  "Spring", "Summer", "Autumn", "Sunday", "Christmas", "Thanksgiving",
+  # verbs / fragments
+  "Track", "Tracked", "Spawned", "Spawn", "Spotted", "Caught",
+  # EF-scale tokens
+  "Ef", "Ef0", "Ef1", "Ef2", "Ef3", "Ef4", "Ef5", "Big", "Holiday",
+  # leading function / connector words that start a captured fragment
+  "For", "After", "As", "When", "While", "Before", "Amid", "Over", "Into",
+  "With", "From", "And", "But", "About", "Following", "During", "Despite",
+  "Because", "Since", "Their", "His", "Her", "Its", "Our", "Your", "More",
+  "Here", "There", "What", "Why", "How", "Where", "Who", "Live", "Latest",
+  # tornado-coverage nouns that aren't places
+  "Outbreak", "Outbreaks", "Warning", "Warnings", "Watch", "Watches",
+  "Damage", "Recovery", "Aftermath", "Cleanup", "Victims", "Survivors",
+  "Relief", "Aid", "Path", "Season", "Alley", "Touchdown", "Touchdowns",
+  "Cleanup", "Rebuild", "Rebuilding", "Anniversary", "Outbreak", "Twister",
+  "Twisters", "Funnel", "Supercell", "Supercells", "Radar", "Forecast",
+  "Tornado", "Tornadoes", "Tag", "Tags", "Force", "Archives", "Cares",
+  "Video", "Photos", "Gallery", "Slideshow", "Map", "Maps", "Coverage",
+  # titles / honorifics (people who appear in coverage, not places)
+  "Gov", "Governor", "President", "Sen", "Senator", "Rep", "Mayor", "Dr",
+  "Biden", "Jill", "Trump", "Harris", "Beshear", "Sheriff", "Chief",
+  # regions / directions / non-place geographies
+  "Midwest", "Midwestern", "Southeast", "Southeastern", "Northeast",
+  "Northeastern", "Southwest", "Southwestern", "Northwest", "Northwestern",
+  "Plains", "Heartland", "Dixie", "Caribbean", "Asia", "Europe", "Gulf",
+  "Coast", "Region", "Area", "Bay Area", "Central", "Tornado Alley",
+  # title-case verbs / gerunds / fragments
+  "Bringing", "Touched", "Touching", "Causing", "Leaving", "Killing",
+  "Spawning", "Producing", "Hitting", "Striking", "Including", "Total",
+  "Down", "Through", "Across", "Leaves", "Brings", "Causes", "Kills",
+  "Hits", "Strikes", "Slams", "Rips", "Tears", "Tore", "Hit", "Struck",
+  "Says", "Said", "Sees", "Seen", "Left", "Made", "Makes", "Take", "Takes",
+  # generic people / common nouns in coverage
+  "Scientists", "Officials", "Residents", "People", "Family", "Families",
+  "Crews", "Teams", "Experts", "Forecasters", "Meteorologist",
+  "Meteorologists", "Workers", "Students", "Schools", "Homes", "Houses",
+  "Businesses", "Neighborhood", "Neighborhoods", "Community", "Communities",
+  "Church", "Churches", "Hospital", "Airport", "Downtown", "Suburb",
+  # holidays / event descriptors
+  "Halloween", "Easter", "Memorial", "Labor", "Independence", "Veterans",
+  "Christmas", "Thanksgiving", "Outbreak"
+)
+
+TORNADO_ALL_STOPWORDS <- unique(c(NAME_STOPWORDS, TORNADO_DESC_STOPWORDS))
+
+# Turn a captured token into a display common name.
+format_tornado_name <- function(token) {
+  token <- str_trim(token)
+  low <- tolower(token)
+  if (str_detect(low, "^super\\s+outbreak$")) return("Super Outbreak")
+  if (str_detect(low, "^quad-?state$"))        return("Quad-State Tornado")
+  if (str_detect(low, "^tri-?state$"))          return("Tri-State Tornado")
+  # Month + year → "December 2021 Tornado Outbreak"
+  if (str_detect(token, sprintf("^(?:%s)\\s+\\d{4}$", TORNADO_MONTHS))) {
+    return(paste(str_to_title(token), "Tornado Outbreak"))
+  }
+  # Bare year → "2011 Tornado Outbreak"
+  if (str_detect(token, "^\\d{4}$")) return(paste0(token, " Tornado Outbreak"))
+  # Otherwise a place → "<Place> Tornado"
+  paste(str_to_title(token), "Tornado")
+}
+
+# Extract + rank tornado candidates from article titles.
+# Pools two signals: (1) verbatim special forms (named/date outbreaks) and
+# (2) the most-frequent proper noun across the coverage (the hit town).
+# Returns tibble(display_name, frequency, raw) sorted by frequency desc.
+# `extra_stopwords` lets the caller drop e.g. the event's own state words.
+extract_tornado_candidates <- function(titles, extra_stopwords = character(0)) {
+  if (length(titles) == 0) return(tibble())
+  stops <- unique(c(TORNADO_ALL_STOPWORDS, extra_stopwords))
+  rows <- list()
+  add <- function(token, idx) {
+    rows[[length(rows) + 1]] <<- data.frame(
+      token = str_trim(token), title_idx = idx, stringsAsFactors = FALSE
+    )
+  }
+
+  # (1) Special forms — captured verbatim wherever they appear.
+  for (pat in TORNADO_SPECIAL_PATTERNS) {
+    m <- str_match_all(titles, pat)
+    for (i in seq_along(m)) {
+      mi <- m[[i]]
+      if (is.null(mi) || nrow(mi) == 0) next
+      for (j in seq_len(nrow(mi))) if (!is.na(mi[j, 2])) add(mi[j, 2], i)
+    }
+  }
+
+  # (2) Proper-noun frequency — every 1-2 word capitalized token, but ONLY from
+  # titles that actually mention a tornado. This anchors the signal so a
+  # non-tornado Severe Storm (whose articles never say "tornado") yields nothing.
+  torn_idx <- which(str_detect(titles, regex("tornado|twister", ignore_case = TRUE)))
+  nm <- str_match_all(titles[torn_idx], TORNADO_NOUN_PATTERN)
+  for (k in seq_along(nm)) {
+    mi <- nm[[k]]
+    if (is.null(mi) || nrow(mi) == 0) next
+    i <- torn_idx[k]  # preserve original title index for distinct-title counts
+    for (j in seq_len(nrow(mi))) if (!is.na(mi[j, 2])) add(mi[j, 2], i)
+  }
+  if (length(rows) == 0) return(tibble())
+
+  # Special date/outbreak tokens bypass the place stopword filter.
+  is_special <- function(tok) {
+    str_detect(tok, regex(sprintf("^(?:%s)\\s+\\d{4}$", TORNADO_MONTHS), ignore_case = TRUE)) |
+    str_detect(tok, "^\\d{4}$") |
+    str_detect(tok, regex("^(super\\s+outbreak|quad-?state|tri-?state)$", ignore_case = TRUE))
+  }
+
+  cand <- do.call(rbind, rows) |>
+    as_tibble() |>
+    distinct(token, title_idx) |>          # one vote per token per title
+    filter(!is.na(token), nchar(token) >= 3) |>
+    mutate(special = is_special(token)) |>
+    # Drop any token whose first OR only word is a stopword/descriptor/state.
+    filter(special |
+           (!str_to_title(word(token, 1)) %in% stops &
+            !str_to_title(token) %in% stops)) |>
+    mutate(display_name = vapply(token, format_tornado_name, character(1)))
+
+  if (nrow(cand) == 0) return(tibble())
+
+  cand |>
+    group_by(display_name) |>
+    summarise(
+      frequency = n_distinct(title_idx),
+      raw = first(token),
+      .groups = "drop"
+    ) |>
+    arrange(desc(frequency))
+}
+
+# Build the tornado candidate-review table from gathered results.
+# `declarations` is resolved at call time (defined later in the script).
+build_tornado_review <- function(new_rows, candidate_lists, declarations) {
+  if (is.null(new_rows) || nrow(new_rows) == 0) return(tibble())
+  cl <- tibble(
+    incident_number = as.integer(names(candidate_lists)),
+    candidates = unlist(candidate_lists, use.names = FALSE)
+  )
+  new_rows |>
+    filter(!is.na(`Common Name 1`)) |>
+    left_join(declarations |> select(incident_number, incident_type, state,
+                                      incident_start_d, year),
+              by = "incident_number") |>
+    left_join(cl, by = "incident_number") |>
+    mutate(chosen_name = `Common Name 1`) |>   # pre-fill with top pick; edit me
+    select(incident_number, year, incident_type, state,
+           chosen_name, candidates,
+           top_pick = `Common Name 1`, confidence, candidate_frequency,
+           sample_url) |>
+    arrange(year, incident_number)
+}
 
 # --- Date parsing (CSV dates are m/d/yy) -------------------------------------
 
@@ -395,6 +608,15 @@ needs_fetch <- declarations |>
   filter(!incident_number %in% manual_ids) |>
   filter(!incident_number %in% already_fetched_ids)
 
+if (TORNADO_MODE) {
+  # Tornado-only: scope to Tornado + Severe Storm, restricted to the GDELT DOC
+  # API's covered window (2017+; FEMA titles never carry colloquial tornado
+  # names, so pre-2017 events can't be auto-named and are left for manual entry).
+  needs_fetch <- needs_fetch |>
+    filter(incident_type %in% TORNADO_SCOPE_TYPES) |>
+    filter(!is.na(incident_start_d), incident_start_d >= GDELT_DOC_START)
+}
+
 if (POST_GDELT_ONLY) {
   needs_fetch <- needs_fetch |>
     filter(!is.na(incident_start_d), incident_start_d >= GDELT_V2_START)
@@ -406,6 +628,11 @@ if (PRE_GDELT_ONLY) {
 
 if (!is.na(LIMIT)) {
   needs_fetch <- head(needs_fetch, LIMIT)
+}
+
+if (TORNADO_MODE) {
+  cat(sprintf("\n[TORNADO MODE] scope = %s, GDELT-only, min freq = %d\n",
+              paste(TORNADO_SCOPE_TYPES, collapse = " + "), TORNADO_MIN_FREQ))
 }
 
 cat(sprintf("\n%d declarations need common names\n", nrow(needs_fetch)))
@@ -428,6 +655,8 @@ if (nrow(needs_fetch) == 0) {
 # --- Fetch loop --------------------------------------------------------------
 
 results <- list()
+candidate_lists <- list()   # tornado mode: top-N candidate strings, keyed by incident_number
+title_cache <- list()       # tornado mode: raw GDELT titles per event, for offline re-tuning
 n <- nrow(needs_fetch)
 start_time <- Sys.time()
 
@@ -449,7 +678,7 @@ for (i in seq_len(n)) {
   sample_url <- NA_character_
 
   if (use_gdelt) {
-    keywords <- INCIDENT_KEYWORDS[[itype]] %||% c(tolower(itype))
+    keywords <- if (TORNADO_MODE) TORNADO_KEYWORDS else (INCIDENT_KEYWORDS[[itype]] %||% c(tolower(itype)))
     kw_query <- paste(keywords, collapse = " OR ")
     query <- sprintf('(%s) "%s" sourcelang:eng sourcecountry:us',
                      kw_query, state_full)
@@ -468,11 +697,22 @@ for (i in seq_len(n)) {
     if (!is.null(articles) && is.data.frame(articles) && nrow(articles) > 0 &&
         "title" %in% names(articles)) {
       titles <- articles$title
-      candidates <- extract_candidates(titles, itype)
+      if (TORNADO_MODE) {
+        # Cache raw titles (+ a sample URL) so extraction can be re-tuned offline.
+        title_cache[[as.character(inc)]] <- list(
+          incident_number = inc, state = row$state, year = row$year,
+          incident_type = itype,
+          incident_start = as.character(row$incident_start_d),
+          titles = titles,
+          urls = if ("url" %in% names(articles)) articles$url else NA_character_
+        )
+      }
+      candidates <- if (TORNADO_MODE) extract_tornado_candidates(titles)
+                    else extract_candidates(titles, itype)
 
       if (nrow(candidates) > 0 && "url" %in% names(articles)) {
         # Pick a representative URL containing the top name
-        top <- candidates$raw_name[1]
+        top <- if (TORNADO_MODE) candidates$raw[1] else candidates$raw_name[1]
         match_idx <- which(str_detect(titles, fixed(top)))
         if (length(match_idx) > 0) sample_url <- articles$url[match_idx[1]]
       }
@@ -489,7 +729,20 @@ for (i in seq_len(n)) {
   conf <- NA_character_
   freq <- NA_integer_
 
-  if (nrow(candidates) > 0) {
+  if (TORNADO_MODE && nrow(candidates) > 0) {
+    # Review workflow: provisionally assign the top-ranked candidate, but keep
+    # the full top-N list (with frequencies) so a human can pick the real name.
+    top <- candidates[1, ]
+    cn1 <- top$display_name
+    if (nrow(candidates) >= 2) cn2 <- candidates$display_name[2]
+    if (nrow(candidates) >= 3) cn3 <- candidates$display_name[3]
+    source <- "gdelt_media"
+    freq <- top$frequency
+    conf <- if (freq >= 5) "high" else if (freq >= TORNADO_MIN_FREQ) "med" else "low"
+    topn <- head(candidates, TORNADO_TOP_N)
+    candidate_lists[[as.character(inc)]] <-
+      paste(sprintf("%s (%d)", topn$display_name, topn$frequency), collapse = " | ")
+  } else if (nrow(candidates) > 0) {
     top <- candidates[1, ]
     # Determine full name (prefix with incident type word if pattern stripped it)
     format_name <- function(raw, itype) {
@@ -534,8 +787,10 @@ for (i in seq_len(n)) {
     conf <- if (freq >= 5) "high" else if (freq >= 2) "med" else "low"
   }
 
-  # Fallback: OpenFEMA declarationTitle
-  if (is.na(cn1)) {
+  # Fallback: OpenFEMA declarationTitle (skipped in tornado mode — FEMA titles
+  # never contain colloquial tornado names, only generic "Severe Storms,
+  # Tornadoes, and Flooding" descriptions).
+  if (is.na(cn1) && !TORNADO_MODE) {
     ftitle <- fetch_fema_title(inc)
     Sys.sleep(0.3)
     extracted <- extract_name_from_fema_title(ftitle, itype)
@@ -574,14 +829,24 @@ for (i in seq_len(n)) {
   # Checkpoint save — write everything we have so far
   if (i %% CHECKPOINT_EVERY == 0 && i < n) {
     partial_new <- if (length(results) > 0) bind_rows(results) else tibble(incident_number = integer())
-    partial_attempted <- needs_fetch$incident_number[seq_len(i)]
-    checkpoint <- existing |>
-      filter(!incident_number %in% partial_attempted) |>
-      bind_rows(partial_new) |>
-      arrange(incident_number)
-    write_csv(checkpoint, EVENTS_CSV, na = "")
-    cat(sprintf("    [checkpoint] %d/%d processed, %d named entries saved\n",
-                i, n, nrow(checkpoint)))
+    if (TORNADO_MODE) {
+      # Tornado mode never touches Events.csv (names are unconfirmed); checkpoint
+      # the candidate-review CSV + raw-title cache instead so a long run isn't lost.
+      partial_review <- build_tornado_review(partial_new, candidate_lists, declarations)
+      write_csv(partial_review, TORNADO_REVIEW_CSV, na = "")
+      saveRDS(title_cache, TORNADO_TITLES_CACHE)
+      cat(sprintf("    [checkpoint] %d/%d processed, %d candidate events saved\n",
+                  i, n, nrow(partial_review)))
+    } else {
+      partial_attempted <- needs_fetch$incident_number[seq_len(i)]
+      checkpoint <- existing |>
+        filter(!incident_number %in% partial_attempted) |>
+        bind_rows(partial_new) |>
+        arrange(incident_number)
+      write_csv(checkpoint, EVENTS_CSV, na = "")
+      cat(sprintf("    [checkpoint] %d/%d processed, %d named entries saved\n",
+                  i, n, nrow(checkpoint)))
+    }
   }
 }
 
@@ -602,33 +867,53 @@ if (nrow(new_rows) > 0) {
 
 # Update existing: drop rows we just attempted (success or fail), then bind
 # back only the successful new ones. This cleans stale NA rows from prior runs.
-final <- existing |>
-  filter(!incident_number %in% attempted_ids) |>
-  bind_rows(new_rows) |>
-  arrange(incident_number)
+# Tornado mode is review-only and must NOT write provisional names into
+# Events.csv — it writes the candidate-review CSV below instead.
+if (!TORNADO_MODE) {
+  final <- existing |>
+    filter(!incident_number %in% attempted_ids) |>
+    bind_rows(new_rows) |>
+    arrange(incident_number)
 
-cat(sprintf("\nWriting updated events CSV → %s (%d total rows)\n",
-            EVENTS_CSV, nrow(final)))
-write_csv(final, EVENTS_CSV, na = "")
+  cat(sprintf("\nWriting updated events CSV → %s (%d total rows)\n",
+              EVENTS_CSV, nrow(final)))
+  write_csv(final, EVENTS_CSV, na = "")
+}
 
-# --- Review CSV for med/low confidence --------------------------------------
+# --- Review CSV --------------------------------------------------------------
 
-review <- final |>
-  filter(source %in% c("gdelt_media", "fema_title"),
-         confidence %in% c("med", "low"),
-         !is.na(`Common Name 1`)) |>
-  left_join(
-    declarations |> select(incident_number, incident_type, state,
-                          incident_start_d, year),
-    by = "incident_number"
-  ) |>
-  select(incident_number, year, incident_type, state,
-         `Common Name 1`, `Common Name 2`, `Common Name 3`,
-         source, confidence, candidate_frequency, sample_url)
+if (TORNADO_MODE) {
+  # Candidate-list review: one row per event with the top-N ranked candidates
+  # (name + article frequency) and a `chosen_name` column (pre-filled with the
+  # top pick) for the human to confirm or correct.
+  review <- build_tornado_review(new_rows, candidate_lists, declarations)
+  cat(sprintf("Writing tornado review CSV → %s (%d events to curate)\n",
+              TORNADO_REVIEW_CSV, nrow(review)))
+  write_csv(review, TORNADO_REVIEW_CSV, na = "")
+  saveRDS(title_cache, TORNADO_TITLES_CACHE)
+  cat(sprintf("Cached raw titles for %d events → %s\n",
+              length(title_cache), TORNADO_TITLES_CACHE))
 
-cat(sprintf("Writing review CSV → %s (%d rows to spot-check)\n",
-            REVIEW_CSV, nrow(review)))
-write_csv(review, REVIEW_CSV, na = "")
+  cat("\nDone. Next step: open tornado_names_review.csv, edit the 'chosen_name'\n")
+  cat("column for each event, then run: Rscript apply_tornado_names.R\n")
+} else {
+  review <- final |>
+    filter(source %in% c("gdelt_media", "fema_title"),
+           confidence %in% c("med", "low"),
+           !is.na(`Common Name 1`)) |>
+    left_join(
+      declarations |> select(incident_number, incident_type, state,
+                            incident_start_d, year),
+      by = "incident_number"
+    ) |>
+    select(incident_number, year, incident_type, state,
+           `Common Name 1`, `Common Name 2`, `Common Name 3`,
+           source, confidence, candidate_frequency, sample_url)
 
-cat("\nDone. Next step: review the med/low-confidence rows, then run:\n")
-cat("  Rscript add_common_names.R\n")
+  cat(sprintf("Writing review CSV → %s (%d rows to spot-check)\n",
+              REVIEW_CSV, nrow(review)))
+  write_csv(review, REVIEW_CSV, na = "")
+
+  cat("\nDone. Next step: review the med/low-confidence rows, then run:\n")
+  cat("  Rscript add_common_names.R\n")
+}

@@ -147,7 +147,12 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
         }
       }
 
-      const typeMatch = selectedDisasterTypes.length === 0 || selectedDisasterTypes.includes(row.incident_type);
+      const eventLower = (row.event || '').toLowerCase();
+      const typeMatch =
+        selectedDisasterTypes.length === 0 ||
+        selectedDisasterTypes.some(t =>
+          row.incident_type === t || eventLower.includes(t.toLowerCase())
+        );
 
       let fundingMatch = true;
       if (selectedFundingTypes.length > 0) {
@@ -288,21 +293,7 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
 
       {/* ─── Hero / Header ─────────────────────────────────────────── */}
       <section className="pt-8 pb-10">
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-          <div>
-            <h1 className="text-[2.5rem] leading-[1.1] font-black text-[#003A63] tracking-tight">
-              Explore the Disaster<br />Dollar Database
-            </h1>
-            <p className="mt-3 text-[#89684F] text-base max-w-xl leading-relaxed">
-              Tracking federal disaster assistance across FEMA, HUD, and SBA programs.
-              {dataRangeInfo && (
-                <span className="text-[#89684F]">
-                  {' '}{dataRangeInfo.total.toLocaleString()} disaster records from {dataRangeInfo.earliest} to {dataRangeInfo.latest}.
-                </span>
-              )}
-            </p>
-          </div>
-
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-end gap-4">
           {/* Quick stats ticker */}
           <div className="flex items-center gap-6 text-right">
             <div>
@@ -324,7 +315,7 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
       <section className="mb-8">
         <div className={`grid grid-cols-2 ${useSBAData ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3`}>
           {selectedFundingTypes.includes('ihp') && (
-            <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-4 group hover:border-[#2171b5]/30 transition-colors">
+            <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-4 group hover:border-[#2171b5]/30 transition-colors">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-[#2171b5]" />
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#003A63] font-semibold mb-1">IHP</div>
               <div className="text-xl font-black text-[#2171b5] tabular-nums leading-tight">{formatCurrency(fundingTotals.ihp)}</div>
@@ -332,7 +323,7 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
             </div>
           )}
           {selectedFundingTypes.includes('pa') && (
-            <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-4 group hover:border-[#41B6E6]/30 transition-colors">
+            <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-4 group hover:border-[#41B6E6]/30 transition-colors">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-[#41B6E6]" />
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#003A63] font-semibold mb-1">PA</div>
               <div className="text-xl font-black text-[#41B6E6] tabular-nums leading-tight">{formatCurrency(fundingTotals.pa)}</div>
@@ -340,7 +331,7 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
             </div>
           )}
           {selectedFundingTypes.includes('cdbg_dr_allocation') && (
-            <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-4 group hover:border-[#89684F]/30 transition-colors">
+            <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-4 group hover:border-[#89684F]/30 transition-colors">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-[#89684F]" />
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#003A63] font-semibold mb-1">CDBG-DR</div>
               <div className="text-xl font-black text-[#89684F] tabular-nums leading-tight">{formatCurrency(fundingTotals.cdbg)}</div>
@@ -348,7 +339,7 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
             </div>
           )}
           {selectedFundingTypes.includes('sba') && useSBAData && (
-            <div className="relative overflow-hidden rounded-lg bg-white border border-[#E6E7E8] p-4 group hover:border-[#228B22]/30 transition-colors">
+            <div className="relative overflow-hidden rounded-b-lg bg-white border border-[#E6E7E8] p-4 group hover:border-[#228B22]/30 transition-colors">
               <div className="absolute top-0 left-0 w-full h-[3px] bg-[#228B22]" />
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#003A63] font-semibold mb-1">SBA</div>
               <div className="text-xl font-black text-[#228B22] tabular-nums leading-tight">{formatCurrency(fundingTotals.sba)}</div>

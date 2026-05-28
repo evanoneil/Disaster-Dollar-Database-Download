@@ -2,7 +2,7 @@ import DisasterLookup from '@/components/DisasterLookup'
 
 export default function DisasterLookupPage() {
   return (
-    <main className="min-h-screen bg-[#f7f8f9]">
+    <main className="min-h-screen bg-white">
       <DisasterLookup useSBAData={true} />
     </main>
   )
