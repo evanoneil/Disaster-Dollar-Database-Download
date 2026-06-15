@@ -214,7 +214,7 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 pb-16">
+    <div className="max-w-7xl mx-auto px-6 pb-6">
       {/* Picker */}
       <section className="pt-8 mb-8">
         <div className="relative max-w-4xl">
