@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import _ from 'lodash';
 import { Search, X, Plus, ExternalLink } from 'lucide-react';
+import { MAIN_CSV, loadEnrichment, applyEnrichment } from '@/lib/disasterData';
 
 interface DisasterRow {
   incident_number: number;
@@ -21,6 +22,7 @@ interface DisasterRow {
   common_name_1?: string | null;
   common_name_2?: string | null;
   common_name_3?: string | null;
+  _searchTerms?: string;
   year: number;
 }
 
@@ -94,14 +96,18 @@ const DisasterComparison: React.FC<Props> = ({ useSBAData = true }) => {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/data/disaster_dollar_database_with_sba_pa_fix_2025_11_12.csv');
+        const enrichment = await loadEnrichment();
+        const res = await fetch(MAIN_CSV);
         const text = await res.text();
         Papa.parse(text, {
           header: true,
           dynamicTyping: true,
           skipEmptyLines: true,
           complete: (results) => {
-            const rows = (results.data as DisasterRow[]).filter(r => r.incident_number);
+            const rows = applyEnrichment(
+              (results.data as DisasterRow[]).filter(r => r.incident_number),
+              enrichment,
+            );
             setRaw(rows);
             setLoading(false);
           },
@@ -172,6 +178,7 @@ const DisasterComparison: React.FC<Props> = ({ useSBAData = true }) => {
       const hay = [
         displayName(d),
         cleanStr(d.common_name_1), cleanStr(d.common_name_2), cleanStr(d.common_name_3),
+        cleanStr(d._searchTerms),
         cleanStr(d.event), d.incident_type, d.state,
         STATE_NAMES[d.state], String(d.year), String(d.incident_number),
       ].filter(Boolean).join(' ').toLowerCase();

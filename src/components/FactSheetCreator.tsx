@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as Papa from 'papaparse';
-import { Search, Filter, Check, CheckSquare, Square, Circle, CheckCircle } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import FactSheetDisplay from './FactSheetDisplay';
+import { MAIN_CSV, loadEnrichment, applyEnrichment } from '@/lib/disasterData';
 
 interface DisasterData {
   incident_start: string;
@@ -24,12 +25,23 @@ interface DisasterData {
   common_name_2?: string;
   common_name_3?: string;
   tribal_request?: boolean | string;
+  _searchTerms?: string;
   // ... add other fields as needed
 }
 
 const validName = (v: string | undefined | null): string | undefined => {
   if (!v || v === 'NA' || v === '0' || v.trim() === '') return undefined;
   return v;
+};
+
+const isTribal = (v: boolean | string | undefined): boolean => v === true || v === 'TRUE';
+
+const formatCurrency = (n: number): string => {
+  if (!n || isNaN(n)) return '$0';
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
 };
 
 interface FactSheetCreatorProps {
@@ -41,44 +53,40 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<DisasterData | null>(null);
-  const [searchResults, setSearchResults] = useState<DisasterData[]>([]);
-  const [showResults, setShowResults] = useState(false);
-  const [selectedResult, setSelectedResult] = useState<DisasterData | null>(null);
+  const [showPanel, setShowPanel] = useState(false);
   const [stateFilter, setStateFilter] = useState('');
   const [tribalOnly, setTribalOnly] = useState(false);
 
   // State and territory mappings
   const stateNames = {
     'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
-    'CO': 'Colorado', 'CT': 'Connecticut', 'DC': 'District of Columbia', 'DE': 'Delaware', 
-    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 
-    'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 
-    'ME': 'Maine', 'MD': 'Maryland', 'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 
-    'MS': 'Mississippi', 'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 
-    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York', 
-    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma', 
-    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina', 
-    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont', 
+    'CO': 'Colorado', 'CT': 'Connecticut', 'DC': 'District of Columbia', 'DE': 'Delaware',
+    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois',
+    'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana',
+    'ME': 'Maine', 'MD': 'Maryland', 'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota',
+    'MS': 'Mississippi', 'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
     'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming',
-    'PR': 'Puerto Rico', 'GU': 'Guam', 'VI': 'Virgin Islands', 'MP': 'Northern Mariana Islands', 
-    'AS': 'American Samoa', 'FM': 'Federated States of Micronesia', 'MH': 'Marshall Islands', 
+    'PR': 'Puerto Rico', 'GU': 'Guam', 'VI': 'Virgin Islands', 'MP': 'Northern Mariana Islands',
+    'AS': 'American Samoa', 'FM': 'Federated States of Micronesia', 'MH': 'Marshall Islands',
     'PW': 'Palau'
   };
+
+  const getStateName = (abbr: string) => stateNames[abbr as keyof typeof stateNames] || abbr;
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const csvFile = useSBAData
-          ? '/data/disaster_dollar_database_with_sba_pa_fix_2025_11_12.csv'
-          : '/data/disaster_dollar_database_2025_06_02.csv';
-        const response = await fetch(csvFile);
+        const enrichment = await loadEnrichment();
+        const response = await fetch(MAIN_CSV);
         const text = await response.text();
         Papa.parse(text, {
           header: true,
           dynamicTyping: true,
           complete: (results) => {
-            console.log('First row of data:', results.data[0]);
-            
             // Process data to ensure consistent types and add a year field
             const processedData = (results.data as DisasterData[])
               .filter((item: any) => {
@@ -88,20 +96,20 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
               .map(item => {
                 // Add a year field for easier filtering
                 const year = item.incident_start ? new Date(item.incident_start).getFullYear() : null;
-                
+
                 // Ensure numeric values are properly parsed
-                const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total : 
+                const ihpTotal = typeof item.ihp_total === 'number' ? item.ihp_total :
                             (typeof item.ihp_total === 'string' ? parseFloat(item.ihp_total) || 0 : 0);
-                
+
                 // If we don't have applicants data, estimate it based on disaster type
                 let ihpApplicants = item.ihp_applicants;
                 if (!ihpApplicants && ihpTotal > 0) {
                   // Different disasters have different average grant sizes
                   let avgGrantSize = 4000; // default
-                  
+
                   if (item.incident_type) {
                     const disasterType = item.incident_type.toLowerCase();
-                    
+
                     // Hurricane assistance tends to be higher
                     if (disasterType.includes('hurricane') || disasterType.includes('typhoon')) {
                       avgGrantSize = 6000;
@@ -119,11 +127,11 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
                       avgGrantSize = 4500;
                     }
                   }
-                  
+
                   // Calculate estimated applicants
                   ihpApplicants = Math.round(ihpTotal / avgGrantSize);
                 }
-                
+
                 return {
                   ...item,
                   year,
@@ -137,11 +145,13 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
                                                  (typeof item.sba_total_approved_loan_amount === 'string' ? parseFloat(item.sba_total_approved_loan_amount) || 0 : 0)
                 };
               });
-            
-            // Remove any incomplete entries
-            const validData = processedData.filter(item => item.incident_number);
-            
-            console.log(`Loaded ${validData.length} disaster records`);
+
+            // Remove any incomplete entries, then join in tribal flags + search terms
+            const validData = applyEnrichment(
+              processedData.filter(item => item.incident_number),
+              enrichment,
+            );
+
             setData(validData);
             setLoading(false);
           }
@@ -154,236 +164,181 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
     loadData();
   }, []);
 
-  // Handle search input change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-    if (e.target.value.trim() === '') {
-      setSearchResults([]);
-      setShowResults(false);
-      setSelectedResult(null);
-    }
-  };
+  const totalFederal = (d: DisasterData) =>
+    (d.ihp_total || 0) + (d.pa_total || 0) + (d.cdbg_dr_allocation || 0) +
+    (useSBAData ? (d.sba_total_approved_loan_amount || 0) : 0);
 
-  // Handle search submission
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  const displayName = (d: DisasterData) =>
+    validName(d.common_name_1) || d.event || `${d.incident_type} — ${getStateName(d.state)}`;
 
-    const hasQuery = searchQuery.trim() !== '';
-    const hasFilters = stateFilter !== '' || tribalOnly;
+  // States present in the data, for the filter dropdown
+  const allStates = useMemo(
+    () => Array.from(new Set(data.map(d => d.state))).filter(Boolean).sort() as string[],
+    [data]
+  );
 
-    if (!hasQuery && !hasFilters) {
-      setSearchResults([]);
-      setShowResults(false);
-      setSelectedResult(null);
-      return;
-    }
+  const hasActiveQuery = searchQuery.trim() !== '' || stateFilter !== '' || tribalOnly;
 
-    const query = searchQuery.toLowerCase();
-
-    // Search through the data for matching events (including common names)
-    let results = data.filter(item => {
-      // Apply text search (if query provided)
-      const matchesQuery = !hasQuery || (
-        (item.event && item.event.toLowerCase().includes(query)) ||
-        (item.incident_type && item.incident_type.toLowerCase().includes(query)) ||
-        (item.state && item.state.toLowerCase().includes(query)) ||
-        (item.incident_number && item.incident_number.toString().includes(query)) ||
-        (validName(item.common_name_1) && validName(item.common_name_1)!.toLowerCase().includes(query)) ||
-        (validName(item.common_name_2) && validName(item.common_name_2)!.toLowerCase().includes(query)) ||
-        (validName(item.common_name_3) && validName(item.common_name_3)!.toLowerCase().includes(query))
-      );
-
-      // Apply state filter
-      const matchesState = !stateFilter || item.state === stateFilter;
-
-      // Apply tribal filter
-      const matchesTribal = !tribalOnly ||
-        item.tribal_request === true || item.tribal_request === 'TRUE';
-
-      return matchesQuery && matchesState && matchesTribal;
-    });
-
-    // Sort results by date (most recent first)
-    const sortedResults = [...results].sort((a, b) => {
-      const dateA = a.incident_start ? new Date(a.incident_start).getTime() : 0;
-      const dateB = b.incident_start ? new Date(b.incident_start).getTime() : 0;
-      return dateB - dateA;
-    });
-
-    setSearchResults(sortedResults);
-    setSelectedResult(null);
-    setShowResults(true);
-  };
-
-  // Display fact sheet for selected event
-  const displaySelectedEvents = () => {
-    if (selectedResult) {
-      setSelectedEvent(selectedResult);
-      setShowResults(false);
-    }
-  };
+  // Live-filtered matches for the search dropdown (most recent first)
+  const filtered = useMemo(() => {
+    if (!hasActiveQuery) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return data
+      .filter(d => {
+        if (stateFilter && d.state !== stateFilter) return false;
+        if (tribalOnly && !isTribal(d.tribal_request)) return false;
+        if (!q) return true;
+        const hay = [
+          displayName(d), d.event, d.incident_type, d.state, getStateName(d.state),
+          String(d.incident_number), d._searchTerms,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(q);
+      })
+      .sort((a, b) => {
+        const da = a.incident_start ? new Date(a.incident_start).getTime() : 0;
+        const db = b.incident_start ? new Date(b.incident_start).getTime() : 0;
+        return db - da;
+      });
+  }, [data, searchQuery, stateFilter, tribalOnly, hasActiveQuery]);
 
   // Format date for display
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  // Get state name from abbreviation
-  const getStateName = (abbr: string) => {
-    return stateNames[abbr as keyof typeof stateNames] || abbr;
+  const selectEvent = (event: DisasterData) => {
+    setSelectedEvent(event);
+    setShowPanel(false);
   };
 
   if (loading) {
-    return <div className="text-center p-4">Loading data...</div>;
+    return (
+      <div className="max-w-7xl mx-auto px-6 py-20">
+        <div className="flex items-center justify-center gap-3">
+          <div className="w-2 h-2 bg-[#00A79D] rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-[#003A63] rounded-full animate-pulse" style={{ animationDelay: '0.15s' }} />
+          <div className="w-2 h-2 bg-[#89684F] rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
+          <span className="ml-2 text-sm text-[#89684F] font-medium">Loading disaster records...</span>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-2 text-[#003A63]">Disaster Fact Sheet Creator</h1>
-        <p className="text-[#89684F]">
-          Search for a specific disaster event to create a sharable fact sheet with key data.
+    <div className="max-w-7xl mx-auto px-6 pb-16">
+      {/* Header */}
+      <section className="pt-8 mb-6">
+        <h1 className="text-xl font-bold text-[#003A63]">Disaster Fact Sheet Creator</h1>
+        <p className="text-sm text-[#89684F] mt-1">
+          Search for a disaster to build a shareable fact sheet of its federal funding.
         </p>
-      </div>
+      </section>
 
-      {/* Search bar and filters */}
-      <div className="mb-8">
-        <form onSubmit={handleSearch}>
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={handleSearchChange}
-              placeholder="Search by event name, common name (e.g. Hurricane Katrina), or disaster number..."
-              className="w-full p-4 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003A63]"
-            />
-            <button
-              type="submit"
-              className="absolute right-4 top-4 text-[#003A63]"
-            >
-              <Search size={20} />
-            </button>
-          </div>
-
-          {/* Filters row */}
-          <div className="mt-3 flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter size={16} className="text-[#89684F]" />
-              <select
-                value={stateFilter}
-                onChange={(e) => setStateFilter(e.target.value)}
-                className="border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003A63]"
-              >
-                <option value="">All States &amp; Territories</option>
-                {Object.entries(stateNames)
-                  .sort(([, a], [, b]) => a.localeCompare(b))
-                  .map(([abbr, name]) => (
-                    <option key={abbr} value={abbr}>{name}</option>
-                  ))
-                }
-              </select>
+      {/* Picker */}
+      <section className="mb-8">
+        <div className="relative max-w-4xl">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#89684F]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setShowPanel(true); }}
+                onFocus={() => { if (hasActiveQuery) setShowPanel(true); }}
+                placeholder="Search by name (e.g. Hurricane Katrina), state, or DR number..."
+                className="w-full pl-10 pr-9 py-3 text-sm bg-white border border-[#E6E7E8] rounded-md text-[#003A63] placeholder-[#89684F]/60 focus:outline-none focus:ring-1 focus:ring-[#00A79D] focus:border-[#00A79D] shadow-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#89684F] hover:text-[#003A63]"
+                  aria-label="Clear search"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
-
-            <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <select
+              value={stateFilter}
+              onChange={e => { setStateFilter(e.target.value); setShowPanel(true); }}
+              className="text-sm bg-white border border-[#E6E7E8] rounded-md px-3 py-2 text-[#003A63] focus:outline-none focus:ring-1 focus:ring-[#00A79D] focus:border-[#00A79D] min-w-[160px] shadow-sm"
+            >
+              <option value="">All states</option>
+              {allStates.map(s => (
+                <option key={s} value={s}>{getStateName(s)}</option>
+              ))}
+            </select>
+            <label className="flex items-center gap-2 px-3 py-2 text-sm bg-white border border-[#E6E7E8] rounded-md shadow-sm cursor-pointer whitespace-nowrap">
               <input
                 type="checkbox"
                 checked={tribalOnly}
-                onChange={(e) => setTribalOnly(e.target.checked)}
-                className="w-4 h-4 accent-[#003A63]"
+                onChange={e => { setTribalOnly(e.target.checked); setShowPanel(true); }}
+                className="w-4 h-4 accent-[#00A79D]"
               />
-              <span className="text-[#003A63] font-medium">Tribal Areas only</span>
+              <span className="text-[#003A63] font-medium">Tribal areas only</span>
             </label>
+          </div>
 
-            {(stateFilter || tribalOnly) && (
-              <button
-                type="button"
-                onClick={() => { setStateFilter(''); setTribalOnly(false); }}
-                className="text-xs text-gray-500 underline hover:text-gray-700"
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
-        </form>
-        
-        {/* Search results with radio buttons */}
-        {showResults && searchResults.length > 0 && (
-          <div className="mt-2 border rounded-lg shadow-md">
-            <div className="p-2 bg-gray-100 border-b flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-sm">({searchResults.length} results found)</span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={displaySelectedEvents}
-                  className="px-2 py-1 text-xs bg-[#00A79D] text-white rounded hover:bg-[#003A63]"
-                >
-                  Show Selected
-                </button>
-                <button
-                  onClick={() => setShowResults(false)}
-                  className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-            
-            <div className="max-h-96 overflow-y-auto">
-              <div className="divide-y">
-                {searchResults.map((event, index) => (
-                  <div 
-                    key={`${event.incident_number}-${index}`} 
-                    className="p-3 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setSelectedResult(event)}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="mt-0.5 text-[#003A63]">
-                        {selectedResult && selectedResult.incident_number === event.incident_number ? (
-                          <CheckCircle size={16} />
-                        ) : (
-                          <Circle size={16} />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-[#003A63]">
-                          {validName(event.common_name_1) || event.event || 'Unnamed Event'} {event.incident_number && `(#${event.incident_number})`}
-                        </div>
-                        {validName(event.common_name_1) && (
-                          <div className="text-xs text-gray-500 italic">
-                            {event.event}
-                          </div>
-                        )}
-                        <div className="text-sm text-gray-600 flex justify-between">
-                          <span>{event.incident_type}</span>
-                          <span>
-                            {getStateName(event.state)}
-                            {(event.tribal_request === true || event.tribal_request === 'TRUE') && (
-                              <span className="ml-2 inline-block text-xs bg-[#003A63] text-white px-1.5 py-0.5 rounded">Tribal</span>
-                            )}
-                          </span>
-                          <span>{formatDate(event.incident_start)}</span>
-                        </div>
-                      </div>
-                    </div>
+          {hasActiveQuery && showPanel && (
+            <div className="absolute z-10 left-0 right-0 mt-2 bg-white border border-[#E6E7E8] rounded-md shadow-lg overflow-hidden">
+              <div className="max-h-[380px] overflow-y-auto scrollbar-custom">
+                {filtered.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-[#89684F]">
+                    No disasters match your search.
                   </div>
-                ))}
+                ) : (
+                  <ul className="divide-y divide-[#E6E7E8]/60">
+                    {filtered.slice(0, 100).map(d => (
+                      <li key={d.incident_number}>
+                        <button
+                          onClick={() => selectEvent(d)}
+                          className="w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors hover:bg-[#003A63]/[0.04]"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-[#003A63] truncate">
+                                {displayName(d)}
+                              </span>
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#003A63]/[0.06] text-[#003A63]">
+                                {d.incident_type}
+                              </span>
+                              {isTribal(d.tribal_request) && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#89684F]/[0.12] text-[#89684F]">
+                                  Tribal
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-[#89684F] mt-0.5">
+                              {getStateName(d.state)} · {formatDate(d.incident_start)} · DR-{d.incident_number}
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 text-right">
+                            <div className="text-sm font-bold text-[#00A79D] tabular-nums">
+                              {formatCurrency(totalFederal(d))}
+                            </div>
+                            <div className="text-[10px] text-[#89684F]">federal obligations</div>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {filtered.length > 100 && (
+                  <div className="px-4 py-2 text-[11px] text-[#89684F] text-center border-t border-[#E6E7E8] bg-[#003A63]/[0.015]">
+                    Showing first 100 of {filtered.length.toLocaleString()} matches — refine your search for more.
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
-        
-        {showResults && searchResults.length === 0 && (
-          <div className="mt-2 p-4 border rounded-lg bg-gray-50">
-            <p className="text-gray-600">No disasters found matching "{searchQuery}"</p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </section>
 
       {/* Fact Sheet Display */}
-      {selectedEvent && (
+      {selectedEvent ? (
         <FactSheetDisplay
           event={selectedEvent}
           allEvents={data}
@@ -391,22 +346,15 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
           stateNames={stateNames}
           useSBAData={useSBAData}
         />
-      )}
-
-      {/* Instructions when no event is selected */}
-      {!selectedEvent && !showResults && (
-        <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-          <h3 className="text-lg font-medium text-[#003A63] mb-2">
-            Search for a disaster to get started
-          </h3>
-          <p className="text-gray-600">
-            Enter a disaster name, common name, state, or incident number in the search bar above to find specific events.
-            <br />You can search for terms like &quot;Hurricane Katrina&quot;, &quot;Camp Fire&quot;, &quot;Texas&quot;, or a specific FEMA incident number.
+      ) : (
+        <section className="bg-white border border-dashed border-[#E6E7E8] rounded-lg py-16 text-center">
+          <p className="text-sm text-[#89684F]">
+            Search for a disaster above to generate its fact sheet.
           </p>
-        </div>
+        </section>
       )}
     </div>
   );
 };
 
-export default FactSheetCreator; 
+export default FactSheetCreator;

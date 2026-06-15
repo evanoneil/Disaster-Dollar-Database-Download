@@ -5,6 +5,7 @@ import Papa from 'papaparse';
 import _ from 'lodash';
 import { Search, X } from 'lucide-react';
 import DisasterLookupDisplay from './DisasterLookupDisplay';
+import { MAIN_CSV, loadEnrichment, applyEnrichment } from '@/lib/disasterData';
 
 export interface DisasterData {
   incident_start: string;
@@ -26,6 +27,7 @@ export interface DisasterData {
   common_name_2?: string | null;
   common_name_3?: string | null;
   tribal_request?: boolean | string;
+  _searchTerms?: string;
 }
 
 const STATE_NAMES: Record<string, string> = {
@@ -75,6 +77,10 @@ const formatDate = (s: string): string => {
 
 interface Props { useSBAData?: boolean; }
 
+// Default disaster shown on first load so the section isn't empty — Hurricane
+// Harvey (Texas, 2017), DR-4332.
+const DEFAULT_INCIDENT = 4332;
+
 const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
   const [raw, setRaw] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,30 +88,33 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
   const [stateFilter, setStateFilter] = useState<string>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [showPanel, setShowPanel] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(DEFAULT_INCIDENT);
+  // First-view hint overlay prompting the user to search; dismissed on any interaction.
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const csvFile = useSBAData
-          ? '/data/disaster_dollar_database_with_sba_pa_fix_2025_11_12.csv'
-          : '/data/disaster_dollar_database_2025_06_02.csv';
-        const res = await fetch(csvFile);
+        const enrichment = await loadEnrichment();
+        const res = await fetch(MAIN_CSV);
         const text = await res.text();
         Papa.parse(text, {
           header: true,
           dynamicTyping: true,
           skipEmptyLines: true,
           complete: (results) => {
-            const rows = (results.data as DisasterData[])
-              .filter(r => r && r.incident_number && r.state)
-              .map(r => ({
-                ...r,
-                ihp_total: toNum(r.ihp_total),
-                pa_total: toNum(r.pa_total),
-                cdbg_dr_allocation: toNum(r.cdbg_dr_allocation),
-                sba_total_approved_loan_amount: toNum(r.sba_total_approved_loan_amount),
-              }));
+            const rows = applyEnrichment(
+              (results.data as DisasterData[])
+                .filter(r => r && r.incident_number && r.state)
+                .map(r => ({
+                  ...r,
+                  ihp_total: toNum(r.ihp_total),
+                  pa_total: toNum(r.pa_total),
+                  cdbg_dr_allocation: toNum(r.cdbg_dr_allocation),
+                  sba_total_approved_loan_amount: toNum(r.sba_total_approved_loan_amount),
+                })),
+              enrichment,
+            );
             setRaw(rows);
             setLoading(false);
           }
@@ -173,6 +182,7 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
         const hay = [
           displayName(d),
           cleanStr(d.common_name_1), cleanStr(d.common_name_2), cleanStr(d.common_name_3),
+          cleanStr(d._searchTerms),
           cleanStr(d.event), d.incident_type, d.state,
           STATE_NAMES[d.state], String(d.incident_number),
         ].filter(Boolean).join(' ').toLowerCase();
@@ -214,8 +224,8 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
               <input
                 type="text"
                 value={search}
-                onChange={e => { setSearch(e.target.value); setShowPanel(true); }}
-                onFocus={() => { if (hasActiveQuery) setShowPanel(true); }}
+                onChange={e => { setSearch(e.target.value); setShowPanel(true); setShowIntro(false); }}
+                onFocus={() => { setShowIntro(false); if (hasActiveQuery) setShowPanel(true); }}
                 placeholder="Search by name, state, or DR number..."
                 className="w-full pl-10 pr-9 py-3 text-sm bg-white border border-[#E6E7E8] rounded-md text-[#003A63] placeholder-[#89684F]/60 focus:outline-none focus:ring-1 focus:ring-[#00A79D] focus:border-[#00A79D] shadow-sm"
               />
@@ -264,6 +274,7 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
                           onClick={() => {
                             setSelectedId(d.incident_number);
                             setShowPanel(false);
+                            setShowIntro(false);
                           }}
                           className="w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors hover:bg-[#003A63]/[0.04]"
                         >
@@ -303,19 +314,42 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
       </section>
 
       {/* Result */}
-      {selectedDisaster ? (
-        <DisasterLookupDisplay
-          event={selectedDisaster}
-          allEvents={classified}
-          stateNames={STATE_NAMES}
-          useSBAData={useSBAData}
-          displayName={displayName(selectedDisaster)}
-        />
-      ) : (
-        <section className="bg-white border border-dashed border-[#E6E7E8] rounded-lg py-16 text-center">
-          <p className="text-sm text-[#89684F]">Select a disaster above to see its funding summary.</p>
-        </section>
-      )}
+      <div className="relative">
+        {selectedDisaster ? (
+          <DisasterLookupDisplay
+            event={selectedDisaster}
+            allEvents={classified}
+            stateNames={STATE_NAMES}
+            useSBAData={useSBAData}
+            displayName={displayName(selectedDisaster)}
+          />
+        ) : (
+          <section className="bg-white border border-dashed border-[#E6E7E8] rounded-lg py-16 text-center">
+            <p className="text-sm text-[#89684F]">Select a disaster above to see its funding summary.</p>
+          </section>
+        )}
+
+        {/* First-view overlay: prompt the user to search */}
+        {showIntro && (
+          <div className="absolute inset-0 z-20 flex items-start justify-center pt-12 sm:pt-20 px-4 bg-white/75 backdrop-blur-[1px]">
+            <div className="max-w-md bg-white border border-[#E6E7E8] shadow-xl p-6 text-center">
+              <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-[#00A79D]/10 mb-3">
+                <Search size={20} className="text-[#00A79D]" />
+              </div>
+              <h3 className="text-base font-bold text-[#003A63]">Look up any U.S. disaster</h3>
+              <p className="text-sm text-[#89684F] mt-1.5 leading-relaxed">
+                Search by disaster name, state, or DR number above to see its federal funding.
+              </p>
+              <button
+                onClick={() => setShowIntro(false)}
+                className="mt-4 inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-[#003A63] rounded-md hover:bg-[#002B4A] transition-colors"
+              >
+                Explore
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

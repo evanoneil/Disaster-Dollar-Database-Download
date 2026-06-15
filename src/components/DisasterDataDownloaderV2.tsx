@@ -6,6 +6,7 @@ import _ from 'lodash';
 import { Download, ChevronDown, ChevronUp, SlidersHorizontal, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import TimeSeriesBrush from './TimeSeriesBrush';
 import DisasterMap from './DisasterMap';
+import { MAIN_CSV, loadEnrichment, applyEnrichment } from '@/lib/disasterData';
 
 interface DisasterData {
   incident_start: string;
@@ -84,16 +85,14 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
   useEffect(() => {
     const loadData = async () => {
       try {
-        const csvFile = useSBAData
-          ? '/data/disaster_dollar_database_with_sba_pa_fix_2025_11_12.csv'
-          : '/data/disaster_dollar_database_2025_06_02.csv';
-        const response = await fetch(csvFile);
+        const enrichment = await loadEnrichment();
+        const response = await fetch(MAIN_CSV);
         const text = await response.text();
         Papa.parse(text, {
           header: true,
           dynamicTyping: true,
           complete: (results) => {
-            setData(results.data as DisasterData[]);
+            setData(applyEnrichment(results.data as DisasterData[], enrichment));
             setLoading(false);
           }
         });
