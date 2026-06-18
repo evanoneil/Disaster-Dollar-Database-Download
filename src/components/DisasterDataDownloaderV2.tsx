@@ -24,16 +24,19 @@ interface DisasterData {
 
 interface DisasterDataDownloaderV2Props {
   useSBAData?: boolean;
+  /** Optional content (e.g. nav links) rendered top-right of the hero, opposite the stats. */
+  headerRight?: React.ReactNode;
 }
 
-const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ useSBAData = false }) => {
+const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ useSBAData = false, headerRight }) => {
   const [data, setData] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({
     startYear: 2015,
     startMonth: 1,
-    endYear: 2025,
-    endMonth: 10,
+    // Overwritten on data load with the most recent incident month (see effect below).
+    endYear: 2026,
+    endMonth: 4,
   });
   const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [selectedDisasterTypes, setSelectedDisasterTypes] = useState<string[]>([]);
@@ -108,6 +111,20 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
     if (!loading) {
       const uniqueDisasterTypes = _.uniq(data.map(row => row.incident_type)).filter(Boolean).sort();
       setSelectedDisasterTypes(uniqueDisasterTypes);
+
+      // Default the end of the range to the most recent incident in the data so
+      // it stays current automatically as the dataset is refreshed.
+      const latest = data
+        .map(row => (row.incident_start ? new Date(row.incident_start) : null))
+        .filter((d): d is Date => d !== null && !isNaN(d.getTime()))
+        .reduce<Date | null>((max, d) => (max === null || d > max ? d : max), null);
+      if (latest) {
+        setDateRange(prev => ({
+          ...prev,
+          endYear: latest.getFullYear(),
+          endMonth: latest.getMonth() + 1,
+        }));
+      }
     }
   }, [loading, data]);
 
@@ -291,10 +308,12 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
     <div className="max-w-7xl mx-auto px-6 pb-16">
 
       {/* ─── Hero / Header ─────────────────────────────────────────── */}
-      <section className="pt-8 pb-10">
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-end gap-4">
-          {/* Quick stats ticker */}
-          <div className="flex items-center gap-6 text-right">
+      {/* Single row: summary stats on the left, optional nav links on the
+          right (passed by the home page). items-start aligns their tops. */}
+      <section className="pt-3 pb-8">
+        <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between">
+          {/* Quick stats ticker (sm:pt-1.5 matches the nav links' py-1.5 so the text tops align) */}
+          <div className="flex items-center gap-6 text-left sm:pt-1.5">
             <div>
               <div className="text-[11px] uppercase tracking-[0.12em] text-[#89684F] font-semibold">Matching</div>
               <div className="text-2xl font-black text-[#003A63] tabular-nums">{formatNumber(filteredData.length)}</div>
@@ -307,6 +326,9 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
               <div className="text-[11px] text-[#89684F]">{formatCurrencyFull(fundingTotals.total)}</div>
             </div>
           </div>
+
+          {/* Optional nav links, aligned to the top-right opposite the stats */}
+          {headerRight && <div className="flex-shrink-0">{headerRight}</div>}
         </div>
       </section>
 

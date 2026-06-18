@@ -338,7 +338,7 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
               </div>
               <h3 className="text-base font-bold text-[#003A63]">Look up any U.S. disaster</h3>
               <p className="text-sm text-[#89684F] mt-1.5 leading-relaxed">
-                Search by disaster name, state, or DR number above to see its federal funding.
+                Search by disaster name, state, or DR number above to explore federal funding for a single event. Scroll below to explore the full database and to compare across disasters.
               </p>
               <button
                 onClick={() => setShowIntro(false)}
