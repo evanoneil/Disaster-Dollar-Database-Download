@@ -6,6 +6,7 @@ import * as Papa from 'papaparse';
 import { Search, X } from 'lucide-react';
 import FactSheetDisplay from './FactSheetDisplay';
 import { MAIN_CSV, loadEnrichment, applyEnrichment } from '@/lib/disasterData';
+import { useTrackSearch } from '@/lib/analytics';
 
 interface DisasterData {
   incident_start: string;
@@ -52,6 +53,7 @@ const FactSheetCreator: React.FC<FactSheetCreatorProps> = ({ useSBAData = false 
   const [data, setData] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  useTrackSearch(searchQuery, 'fact-sheet'); // Plausible "Search" event (debounced)
   const [selectedEvent, setSelectedEvent] = useState<DisasterData | null>(null);
   const [showPanel, setShowPanel] = useState(false);
   const [stateFilter, setStateFilter] = useState('');

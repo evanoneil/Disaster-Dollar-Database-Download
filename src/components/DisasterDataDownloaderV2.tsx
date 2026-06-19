@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
 import _ from 'lodash';
 import { Download, ChevronDown, ChevronUp, SlidersHorizontal, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { usePlausible } from 'next-plausible';
 import TimeSeriesBrush from './TimeSeriesBrush';
 import DisasterMap from './DisasterMap';
 import { MAIN_CSV, loadEnrichment, applyEnrichment } from '@/lib/disasterData';
@@ -29,6 +30,7 @@ interface DisasterDataDownloaderV2Props {
 }
 
 const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ useSBAData = false, headerRight }) => {
+  const plausible = usePlausible();
   const [data, setData] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({
@@ -214,6 +216,9 @@ const DisasterDataDownloaderV2: React.FC<DisasterDataDownloaderV2Props> = ({ use
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+
+    // Plausible "Download" event — props let you segment in the dashboard.
+    plausible('Download', { props: { type: 'csv', rows: filteredData.length } });
   };
 
   const handleSort = (column: string) => {

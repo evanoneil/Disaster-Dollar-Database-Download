@@ -6,6 +6,7 @@ import _ from 'lodash';
 import { Search, X } from 'lucide-react';
 import DisasterLookupDisplay from './DisasterLookupDisplay';
 import { MAIN_CSV, loadEnrichment, applyEnrichment } from '@/lib/disasterData';
+import { useTrackSearch } from '@/lib/analytics';
 
 export interface DisasterData {
   incident_start: string;
@@ -85,6 +86,7 @@ const DisasterLookup: React.FC<Props> = ({ useSBAData = true }) => {
   const [raw, setRaw] = useState<DisasterData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  useTrackSearch(search, 'lookup'); // Plausible "Search" event (debounced)
   const [stateFilter, setStateFilter] = useState<string>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [showPanel, setShowPanel] = useState(false);

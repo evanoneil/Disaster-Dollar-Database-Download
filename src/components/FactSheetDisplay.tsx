@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { Download, Share2 } from 'lucide-react';
+import { usePlausible } from 'next-plausible';
 import { format, subYears } from 'date-fns';
 import DisasterFundingChart from './DisasterFundingChart';
 import FundingBreakdownChart from './FundingBreakdownChart';
@@ -101,6 +102,7 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
   stateNames,
   useSBAData = false
 }) => {
+  const plausible = usePlausible();
   const stateName = stateNames[event.state as keyof typeof stateNames] || event.state;
   const multipleEventsSelected = selectedEvents.length > 1;
   
@@ -751,7 +753,10 @@ const FactSheetDisplay: React.FC<FactSheetDisplayProps> = ({
       
       // Save the PDF
       pdf.save(filename);
-      
+
+      // Plausible "Download" event — fires only after a successful PDF save.
+      plausible('Download', { props: { type: 'fact-sheet-pdf', multiple: multipleEventsSelected } });
+
       // Restore button visibility
       buttons.forEach(button => button.style.display = '');
       
