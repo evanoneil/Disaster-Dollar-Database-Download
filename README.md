@@ -20,6 +20,17 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Analytics
+
+This app uses [Plausible](https://plausible.io) (via the `next-plausible` package)
+for cookieless pageview and visitor tracking. No consent banner is required, and
+no configuration is needed — the site-specific script URL is set directly in
+`src/app/layout.tsx`. Plausible ignores localhost, so local dev is untracked.
+
+This app is embedded as a cross-origin iframe on partner sites. Plausible's
+script is cookieless and works inside iframes; if a partner sandboxes the iframe,
+their `sandbox` attribute must include `allow-scripts` for tracking to run.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

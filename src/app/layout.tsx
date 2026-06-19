@@ -2,6 +2,15 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Source_Sans_3 } from 'next/font/google';
+import PlausibleProvider from "next-plausible";
+
+// Cookieless Plausible analytics. This is the site-specific script URL from the
+// Plausible dashboard. The script auto-captures pageviews and SPA route changes
+// (between "/", "/fact-sheet", etc.), is cookieless, and works inside the
+// cross-origin iframe partners embed. Plausible ignores localhost, so dev is
+// untracked automatically. To add custom events later, use the `usePlausible`
+// hook from "next-plausible" in a client component.
+const PLAUSIBLE_SRC = "https://plausible.io/js/pa-rwnquB5tTX4eLb_XHZZYz.js";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,7 +59,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${sourceSans.className} antialiased`}
       >
-        {children}
+        <PlausibleProvider src={PLAUSIBLE_SRC}>
+          {children}
+        </PlausibleProvider>
       </body>
     </html>
   );
